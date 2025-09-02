@@ -37,6 +37,8 @@ int displayArray[MATRIX_HEIGHT][MATRIX_WIDTH];
 String sensor_1_state = "unknown"; //off, disconnected, charging, unknown
 String sensor_2_state = "unknown"; //off, disconnected, charging, unknown
 bool wifi_connected = false;
+bool ws_connected = false;
+bool should_render = true;
 
 
 // highlight border position
@@ -141,18 +143,18 @@ void noWifi(int row) {
 }
 
 int getPixelIndex(int row, int col) {
-    if (row % 2 == 0) {
-        return (row * MATRIX_WIDTH) + col;
-    } else {
-        return (row * MATRIX_WIDTH) + (MATRIX_WIDTH - 1 - col);
-    }
+    // Simplified from serpentine layout to standard left-to-right wiring to fix pixel scrambling.
+    return (row * MATRIX_WIDTH) + col;
 }
 
 uint8_t increaseBrightness(uint8_t tone) {
     // Increase brightness by 20%, capping at 255
-    uint16_t new_tone = tone * 1.2; // Use uint16_t to prevent overflow during calculation
+    uint16_t new_tone = tone * 0.6; // Use uint16_t to prevent overflow during calculation
     if (new_tone > 255) {
         new_tone = 255;
+    }
+    if (new_tone < 0) {
+        new_tone = 0;
     }
     return (uint8_t)new_tone;
 }
@@ -176,6 +178,7 @@ uint32_t highlightPixel(int row, int col, uint32_t rgbColor) {
 }
 
 void drawMatrix() {
+    Serial.println(F("--- Matrix ---"));
     for (int i = 0; i < MATRIX_HEIGHT; i++) {
         for (int j = 0; j < MATRIX_WIDTH; j++) {
             int pixelIndex = getPixelIndex(i, j);
@@ -183,21 +186,24 @@ void drawMatrix() {
             uint32_t rgbColor;
 
             switch (colorValue) {
-                case BLACK:   rgbColor = strip.Color(0, 0, 0); break;
-                case WHITE:   rgbColor = strip.Color(255, 255, 255); break;
-                case RED:     rgbColor = strip.Color(255, 0, 0); break;
-                case GREEN:   rgbColor = strip.Color(0, 255, 0); break;
-                case BLUE:    rgbColor = strip.Color(0, 0, 255); break;
-                case YELLOW:  rgbColor = strip.Color(255, 255, 0); break;
-                case CYAN:    rgbColor = strip.Color(0, 255, 255); break;
-                case MAGENTA: rgbColor = strip.Color(255, 0, 255); break;
-                default:      rgbColor = strip.Color(0, 0, 0); break;
+                case BLACK:   rgbColor = strip.Color(0, 0, 0); Serial.print(F("BL")); break;
+                case WHITE:   rgbColor = strip.Color(255, 255, 255); Serial.print(F("WH")); break;
+                case RED:     rgbColor = strip.Color(255, 0, 0); Serial.print(F("RE")); break;
+                case GREEN:   rgbColor = strip.Color(0, 255, 0); Serial.print(F("GR")); break;
+                case BLUE:    rgbColor = strip.Color(0, 0, 255); Serial.print(F("BU")); break;
+                case YELLOW:  rgbColor = strip.Color(255, 255, 0); Serial.print(F("YE")); break;
+                case CYAN:    rgbColor = strip.Color(0, 255, 255); Serial.print(F("CY")); break;
+                case MAGENTA: rgbColor = strip.Color(255, 0, 255); Serial.print(F("MA")); break;
+                default:      rgbColor = strip.Color(0, 0, 0); Serial.print(F("  ")); break;
             }
+            Serial.print(F(" "));
             rgbColor = highlightPixel(i, j, rgbColor);
             strip.setPixelColor(pixelIndex, rgbColor);
         }
+        Serial.println();
     }
     strip.show();
+    Serial.println(F("--- End Matrix ---"));
 }
 
 // --- Home Assistant & WiFi Functions ---
@@ -288,8 +294,10 @@ void onMessage(WebsocketsMessage message) {
 void onEvent(WebsocketsEvent event, String data) {
     if(event == WebsocketsEvent::ConnectionOpened) {
         Serial.println("Websocket connection opened");
+        ws_connected = true;
     } else if(event == WebsocketsEvent::ConnectionClosed) {
         Serial.println("Websocket connection closed");
+        ws_connected = false;
     }
 }
 
@@ -344,11 +352,72 @@ void render_matrix() {
     drawMatrix();
 }
 
+void clean_display() {
+    createArray8x8();
+    strip.clear();
+    strip.show();
+    Serial.println(F("Display cleared"));
+}
+
+Color stringToColor(String colorName) {
+    colorName.toUpperCase();
+    if (colorName == "BLACK") return BLACK;
+    if (colorName == "WHITE") return WHITE;
+    if (colorName == "RED") return RED;
+    if (colorName == "GREEN") return GREEN;
+    if (colorName == "BLUE") return BLUE;
+    if (colorName == "YELLOW") return YELLOW;
+    if (colorName == "CYAN") return CYAN;
+    if (colorName == "MAGENTA") return MAGENTA;
+    return BLACK; // Default to black if color not found
+}
+
+void handleSerialCommands() {
+    if (Serial.available() > 0) {
+        String command = Serial.readStringUntil('\n');
+        command.trim();
+        if (command == "render true") {
+            should_render = true;
+            Serial.println(F("Rendering enabled"));
+        } else if (command == "render false") {
+            should_render = false;
+            Serial.println(F("Rendering disabled"));
+        } else if (command == "clean") {
+            clean_display();
+        } else if (command.startsWith("draw ")) {
+            String params = command.substring(5);
+            int firstSpace = params.indexOf(' ');
+            int secondSpace = params.indexOf(' ', firstSpace + 1);
+
+            if (firstSpace > 0 && secondSpace > 0) {
+                String x_str = params.substring(0, firstSpace);
+                String y_str = params.substring(firstSpace + 1, secondSpace);
+                String color_str = params.substring(secondSpace + 1);
+
+                int x = x_str.toInt();
+                int y = y_str.toInt();
+                Color color = stringToColor(color_str);
+
+                updateItem(y, x, color);
+                drawMatrix();
+                Serial.print(F("Drawing pixel at ("));
+                Serial.print(x);
+                Serial.print(F(", "));
+                Serial.print(y);
+                Serial.print(F(") with color "));
+                Serial.println(color_str);
+            } else {
+                Serial.println(F("Invalid draw command. Format: draw x y color"));
+            }
+        }
+    }
+}
+
 // --- Main Functions ---
 void setup() {
     Serial.begin(115200);
     strip.begin();
-    strip.setBrightness(50);
+    strip.setBrightness(10);
     strip.show(); // Initialize all pixels to 'off'
 
     connectToWifi();
@@ -361,6 +430,8 @@ void setup() {
 }
 
 void loop() {
+    handleSerialCommands();
+
     // --- Connection Management ---
     // 1. Check WiFi connection status
     if (WiFi.status() != WL_CONNECTED) {
@@ -379,14 +450,14 @@ void loop() {
 
     // 2. If WiFi is on, manage WebSocket connection
     if (wifi_connected) {
-        if (!client.isConnected()) {
+        if (!ws_connected) {
             sensor_1_state = "unknown";
             sensor_2_state = "unknown";
             Serial.println("Websocket disconnected, trying to reconnect...");
-            // Attempt to reconnect. The client.loop() below will handle the connection process.
+            // Attempt to reconnect. The client.poll() below will handle the connection process.
             client.connect(HASS_HOST, HASS_PORT, "/api/websocket");
         }
-        client.loop(); // This must be called to process messages and maintain connection
+        client.poll(); // This must be called to process messages and maintain connection
     }
 
     // --- Timed Display Update ---
@@ -399,6 +470,8 @@ void loop() {
 
         getNextBorderPoint();
 
-        render_matrix();
+        if (should_render) {
+            render_matrix();
+        }
     }
 }
