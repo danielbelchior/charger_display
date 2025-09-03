@@ -9,6 +9,7 @@
 #define LED_PIN      23   // ESP32 pin connected to the data pin (DIN) of the matrix
 #define MATRIX_WIDTH 8    // Matrix width
 #define MATRIX_HEIGHT 8   // Matrix height
+#define BUZZER_PIN    13  // IMPORTANT: Set this to the pin your buzzer is connected to. (Moved from GPIO12 to avoid boot issues)
 
 #define LED_COUNT    (MATRIX_WIDTH * MATRIX_HEIGHT)
 
@@ -32,6 +33,8 @@ enum Color {
     MAGENTA
 };
 
+int displayBrightness = 2;
+double increaseBrightnessValue = 1.4;
 int chargingRow = 1;
 int displayArray[MATRIX_HEIGHT][MATRIX_WIDTH];
 String sensor_1_state = "unknown"; //off, disconnected, charging, unknown
@@ -109,7 +112,7 @@ void drawBorder() {
 
 void state_unknown(int bike, int row) {
     int colStart = (bike == 1) ? 0 : 4;
-    int rowStart = (row % 2 == 0) ? 3 : 4;
+    int rowStart = (row % 2 == 0) ? 2 : 3;
     updateItem(rowStart, colStart + 1, RED);
     updateItem(rowStart, colStart + 2, RED);
 
@@ -148,8 +151,10 @@ int getPixelIndex(int row, int col) {
 }
 
 uint8_t increaseBrightness(uint8_t tone) {
-    // Increase brightness by 20%, capping at 255
-    uint16_t new_tone = tone * 0.6; // Use uint16_t to prevent overflow during calculation
+    // Add a fixed value to each color component to make it visibly brighter.
+    const uint8_t brightness_increase = 50;
+    //uint16_t new_tone = tone + brightness_increase;
+    uint16_t new_tone = tone - brightness_increase;
     if (new_tone > 255) {
         new_tone = 255;
     }
@@ -178,7 +183,7 @@ uint32_t highlightPixel(int row, int col, uint32_t rgbColor) {
 }
 
 void drawMatrix() {
-    Serial.println(F("--- Matrix ---"));
+    //Serial.println(F("--- Matrix ---"));
     for (int i = 0; i < MATRIX_HEIGHT; i++) {
         for (int j = 0; j < MATRIX_WIDTH; j++) {
             int pixelIndex = getPixelIndex(i, j);
@@ -186,24 +191,24 @@ void drawMatrix() {
             uint32_t rgbColor;
 
             switch (colorValue) {
-                case BLACK:   rgbColor = strip.Color(0, 0, 0); Serial.print(F("BL")); break;
-                case WHITE:   rgbColor = strip.Color(255, 255, 255); Serial.print(F("WH")); break;
-                case RED:     rgbColor = strip.Color(255, 0, 0); Serial.print(F("RE")); break;
-                case GREEN:   rgbColor = strip.Color(0, 255, 0); Serial.print(F("GR")); break;
-                case BLUE:    rgbColor = strip.Color(0, 0, 255); Serial.print(F("BU")); break;
-                case YELLOW:  rgbColor = strip.Color(255, 255, 0); Serial.print(F("YE")); break;
-                case CYAN:    rgbColor = strip.Color(0, 255, 255); Serial.print(F("CY")); break;
-                case MAGENTA: rgbColor = strip.Color(255, 0, 255); Serial.print(F("MA")); break;
-                default:      rgbColor = strip.Color(0, 0, 0); Serial.print(F("  ")); break;
+                case BLACK:   rgbColor = strip.Color(0, 0, 0); break;
+                case WHITE:   rgbColor = strip.Color(255, 255, 255); break;
+                case RED:     rgbColor = strip.Color(255, 0, 0); break;
+                case GREEN:   rgbColor = strip.Color(0, 255, 0); break;
+                case BLUE:    rgbColor = strip.Color(0, 0, 255); break;
+                case YELLOW:  rgbColor = strip.Color(255, 255, 0); break;
+                case CYAN:    rgbColor = strip.Color(0, 255, 255); break;
+                case MAGENTA: rgbColor = strip.Color(255, 0, 255); break;
+                default:      rgbColor = strip.Color(0, 0, 0); break;
             }
-            Serial.print(F(" "));
+            //Serial.print(F(" "));
             rgbColor = highlightPixel(i, j, rgbColor);
             strip.setPixelColor(pixelIndex, rgbColor);
         }
-        Serial.println();
+        //Serial.println();
     }
     strip.show();
-    Serial.println(F("--- End Matrix ---"));
+    //Serial.println(F("--- End Matrix ---"));
 }
 
 // --- Home Assistant & WiFi Functions ---
@@ -272,10 +277,12 @@ void onMessage(WebsocketsMessage message) {
             sensor_1_state = state;
             Serial.print("Sensor 1 state updated: ");
             Serial.println(sensor_1_state);
+            playSound(sensor_1_state);
         } else if (strcmp(entity_id, SENSOR_2_ENTITY_ID) == 0) {
             sensor_2_state = state;
             Serial.print("Sensor 2 state updated: ");
             Serial.println(sensor_2_state);
+            playSound(sensor_2_state);
         }
     } else if (strcmp(type, "result") == 0) {
         if (doc["success"] == true) {
@@ -352,6 +359,33 @@ void render_matrix() {
     drawMatrix();
 }
 
+void playSound(String state) {
+    if (state == "charging") {
+        // Ascending notes for charging
+        tone(BUZZER_PIN, 523, 100); // C5
+        delay(100);
+        tone(BUZZER_PIN, 659, 100); // E5
+        delay(100);
+        tone(BUZZER_PIN, 784, 100); // G5
+        delay(100);
+        noTone(BUZZER_PIN);
+    } else if (state == "disconnected") {
+        // Descending notes for disconnected
+        tone(BUZZER_PIN, 784, 100); // G5
+        delay(100);
+        tone(BUZZER_PIN, 659, 100); // E5
+        delay(100);
+        tone(BUZZER_PIN, 523, 100); // C5
+        delay(100);
+        noTone(BUZZER_PIN);
+    } else if (state == "off") {
+        // Simple beep for off
+        tone(BUZZER_PIN, 1000, 200); // 1kHz beep for 200ms
+        delay(200);
+        noTone(BUZZER_PIN);
+    }
+}
+
 void clean_display() {
     createArray8x8();
     strip.clear();
@@ -384,6 +418,9 @@ void handleSerialCommands() {
             Serial.println(F("Rendering disabled"));
         } else if (command == "clean") {
             clean_display();
+        } else if (command.startsWith("b ")){
+            String params = command.substring(5);
+            //increaseBrightnessValue = (double)    
         } else if (command.startsWith("draw ")) {
             String params = command.substring(5);
             int firstSpace = params.indexOf(' ');
@@ -409,6 +446,12 @@ void handleSerialCommands() {
             } else {
                 Serial.println(F("Invalid draw command. Format: draw x y color"));
             }
+        } else if (command.startsWith("sound ")) {
+            String state = command.substring(6);
+            state.trim();
+            Serial.print(F("Playing sound for state: "));
+            Serial.println(state);
+            playSound(state);
         }
     }
 }
@@ -416,10 +459,14 @@ void handleSerialCommands() {
 // --- Main Functions ---
 void setup() {
     Serial.begin(115200);
-    strip.begin();
-    strip.setBrightness(10);
-    strip.show(); // Initialize all pixels to 'off'
 
+    // Initialize buzzer pin
+    pinMode(BUZZER_PIN, OUTPUT);
+    noTone(BUZZER_PIN);
+    strip.begin();
+    strip.setBrightness(displayBrightness);
+    strip.show(); // Initialize all pixels to 'off'
+    render_matrix();
     connectToWifi();
 
     if (wifi_connected) {
