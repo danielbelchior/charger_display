@@ -35,17 +35,17 @@ enum Color {
     MAGENTA
 };
 
-int loopInterations = 0; // blink the board led every 5 times
-int displayBrightness = 2;
-double increaseBrightnessValue = 1.4;
-int chargingRow = 1;
+int loopInterations = 0; // blink the board led every 1500 times to show liveness
+int ledState = LOW; // uses loopInterations to toggle the light
+int displayBrightness = 2; // LED display brightness
+int chargingRow = 1; // Used for display animation
 int displayArray[MATRIX_HEIGHT][MATRIX_WIDTH];
 String sensor_1_state = "unknown"; //off, disconnected, charging, unknown
 String sensor_2_state = "unknown"; //off, disconnected, charging, unknown
 bool wifi_connected = false;
 bool ws_connected = false;
-bool should_render = true;
-int ledState = LOW;
+bool should_render = true; // for debugging
+
 
 
 // highlight border position
@@ -314,12 +314,12 @@ void onMessage(WebsocketsMessage message) {
             sensor_1_state = state;
             Serial.print("Sensor 1 state updated: ");
             Serial.println(sensor_1_state);
-            playSound(sensor_1_state);
+            playSound();
         } else if (strcmp(entity_id, SENSOR_2_ENTITY_ID) == 0) {
             sensor_2_state = state;
             Serial.print("Sensor 2 state updated: ");
             Serial.println(sensor_2_state);
-            playSound(sensor_2_state);
+            playSound();
         }
     } else if (strcmp(type, "result") == 0) {
         if (doc["success"] == true) {
@@ -396,31 +396,20 @@ void render_matrix() {
     drawMatrix();
 }
 
-void playSound(String state) {
-    if (state == "charging") {
-        // Ascending notes for charging
-        tone(BUZZER_PIN, 523, 100); // C5
-        delay(100);
-        tone(BUZZER_PIN, 659, 100); // E5
-        delay(100);
-        tone(BUZZER_PIN, 784, 100); // G5
-        delay(100);
-        noTone(BUZZER_PIN);
-    } else if (state == "disconnected") {
-        // Descending notes for disconnected
-        tone(BUZZER_PIN, 784, 100); // G5
-        delay(100);
-        tone(BUZZER_PIN, 659, 100); // E5
-        delay(100);
-        tone(BUZZER_PIN, 523, 100); // C5
-        delay(100);
-        noTone(BUZZER_PIN);
-    } else if (state == "off") {
-        // Simple beep for off
-        tone(BUZZER_PIN, 1000, 200); // 1kHz beep for 200ms
-        delay(200);
-        noTone(BUZZER_PIN);
-    }
+void playSound() {
+    // Play two short beeps for any state change.
+    // For low-level trigger active buzzer: LOW is ON, HIGH is OFF.
+    
+    // Beep 1
+    digitalWrite(BUZZER_PIN, LOW);  // Buzzer ON
+    delay(100);                     // Beep duration 100ms
+    digitalWrite(BUZZER_PIN, HIGH); // Buzzer OFF
+    delay(50);                      // Pause between beeps
+
+    // Beep 2
+    digitalWrite(BUZZER_PIN, LOW);  // Buzzer ON
+    delay(100);                     // Beep duration 100ms
+    digitalWrite(BUZZER_PIN, HIGH); // Buzzer OFF
 }
 
 void clean_display() {
@@ -455,9 +444,6 @@ void handleSerialCommands() {
             Serial.println(F("Rendering disabled"));
         } else if (command == "clean") {
             clean_display();
-        } else if (command.startsWith("b ")){
-            String params = command.substring(5);
-            //increaseBrightnessValue = (double)    
         } else if (command.startsWith("draw ")) {
             String params = command.substring(5);
             int firstSpace = params.indexOf(' ');
@@ -483,12 +469,9 @@ void handleSerialCommands() {
             } else {
                 Serial.println(F("Invalid draw command. Format: draw x y color"));
             }
-        } else if (command.startsWith("sound ")) {
-            String state = command.substring(6);
-            state.trim();
-            Serial.print(F("Playing sound for state: "));
-            Serial.println(state);
-            playSound(state);
+        } else if (command == "sound") {
+            Serial.println(F("Playing sound..."));
+            playSound();
         }
     }
 }
@@ -497,9 +480,9 @@ void handleSerialCommands() {
 void setup() {
     Serial.begin(115200);
 
-    // Initialize buzzer pin
+    // Initialize buzzer pin for low-level trigger module
     pinMode(BUZZER_PIN, OUTPUT);
-    noTone(BUZZER_PIN);
+    digitalWrite(BUZZER_PIN, HIGH); // Set HIGH to keep buzzer OFF
 
     // Initialize onboard LED
     pinMode(LED_BUILTIN, OUTPUT);
@@ -525,7 +508,7 @@ void loop() {
 
     // Toggle onboard LED as a heartbeat
     loopInterations++;
-    if (loopInterations > 1000){
+    if (loopInterations > 1500){
         loopInterations=0;
         ledState = !ledState;
         digitalWrite(LED_BUILTIN, ledState);
