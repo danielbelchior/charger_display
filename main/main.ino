@@ -1,5 +1,6 @@
 #include <Adafruit_NeoPixel.h>
 #include <WiFi.h>
+#include <HTTPClient.h>
 #include <ArduinoWebsockets.h>
 #include <ArduinoJson.h>
 
@@ -9,7 +10,8 @@
 #define LED_PIN      23   // ESP32 pin connected to the data pin (DIN) of the matrix
 #define MATRIX_WIDTH 8    // Matrix width
 #define MATRIX_HEIGHT 8   // Matrix height
-#define BUZZER_PIN    13  // IMPORTANT: Set this to the pin your buzzer is connected to. (Moved from GPIO12 to avoid boot issues)
+#define BUZZER_PIN    13  // IMPORTANT: Set this to the pin your buzzer is connected to.
+#define LED_BUILTIN   2   // Onboard LED, common on many ESP32 boards
 
 #define LED_COUNT    (MATRIX_WIDTH * MATRIX_HEIGHT)
 
@@ -33,6 +35,7 @@ enum Color {
     MAGENTA
 };
 
+int loopInterations = 0; // blink the board led every 5 times
 int displayBrightness = 2;
 double increaseBrightnessValue = 1.4;
 int chargingRow = 1;
@@ -42,6 +45,7 @@ String sensor_2_state = "unknown"; //off, disconnected, charging, unknown
 bool wifi_connected = false;
 bool ws_connected = false;
 bool should_render = true;
+int ledState = LOW;
 
 
 // highlight border position
@@ -162,6 +166,39 @@ uint8_t increaseBrightness(uint8_t tone) {
         new_tone = 0;
     }
     return (uint8_t)new_tone;
+}
+
+String getEntityState(String entityId){
+    HTTPClient http;
+
+    String url = String("http://") + HASS_HOST + ":" + HASS_PORT + "/api/states/" + entityId;
+    http.begin(url);
+
+    // Add authorization header
+    http.addHeader("Authorization", String("Bearer ") + HASS_TOKEN);
+    http.addHeader("Content-Type", "application/json");
+
+    int httpResponseCode = http.GET();
+
+    if (httpResponseCode > 0) {
+      String payload = http.getString();
+      Serial.println("Response:");
+      Serial.println(payload);
+
+      // Parse JSON to get the state value
+      StaticJsonDocument<200> doc;
+      deserializeJson(doc, payload);
+      const char* state = doc["state"];
+      Serial.print("Sensor state: ");
+      Serial.println(state);
+      http.end();
+      return state;
+    } else {
+      Serial.print("Error on HTTP request: ");
+      Serial.println(httpResponseCode);
+      http.end();
+      return "error";
+    }
 }
 
 uint32_t highlightPixel(int row, int col, uint32_t rgbColor) {
@@ -463,6 +500,9 @@ void setup() {
     // Initialize buzzer pin
     pinMode(BUZZER_PIN, OUTPUT);
     noTone(BUZZER_PIN);
+
+    // Initialize onboard LED
+    pinMode(LED_BUILTIN, OUTPUT);
     strip.begin();
     strip.setBrightness(displayBrightness);
     strip.show(); // Initialize all pixels to 'off'
@@ -470,6 +510,11 @@ void setup() {
     connectToWifi();
 
     if (wifi_connected) {
+        Serial.println("Loading initial state of sensors");
+        sensor_1_state = getEntityState(SENSOR_1_ENTITY_ID);
+        sensor_2_state = getEntityState(SENSOR_2_ENTITY_ID);
+
+        Serial.println("Websocket connecting");
         client.onMessage(onMessage);
         client.onEvent(onEvent);
         client.connect(HASS_HOST, HASS_PORT, "/api/websocket");
@@ -477,6 +522,15 @@ void setup() {
 }
 
 void loop() {
+
+    // Toggle onboard LED as a heartbeat
+    loopInterations++;
+    if (loopInterations > 1000){
+        loopInterations=0;
+        ledState = !ledState;
+        digitalWrite(LED_BUILTIN, ledState);
+    }
+ 
     handleSerialCommands();
 
     // --- Connection Management ---
