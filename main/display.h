@@ -30,6 +30,7 @@ uint8_t highlightBrightness(uint8_t tone);
 uint32_t highlightPixel(int row, int col, uint32_t rgbColor);
 Color stringToColor(String colorName);
 void createArray8x8();
+uint32_t translateColor(Color colorValue);
 
 
 #endif // DISPLAY_H

@@ -87,9 +87,8 @@ void state_disconnected(int bike, int row) {
 }
 
 void noWifi(int row) {
-    if (row % 2 == 0) {
-        updateItem(0, 0, BLUE);
-    }
+    updateItem(0, 0, BLUE);
+    updateItem(0, 7, RED);
     for (int r = 1; r < 8; r += 2) {
         for (int c = r; c < 8; c++) {
             updateItem(c, (7 - r), RED);
@@ -103,14 +102,16 @@ int getPixelIndex(int row, int col) {
 }
 
 uint8_t highlightBrightness(uint8_t tone) {
-    // Subtract a fixed value from the color component to make it visibly darker.
-    const uint8_t brightness_change = 50;
-    int16_t new_tone = (int16_t)tone - brightness_change;
-
-    if (new_tone < 0) {
-        new_tone = 0; // Prevent underflow by clamping at 0
+    // Add a fixed value to each color component to make it visibly brighter.
+    const uint8_t brightness_increase = 80;
+    //uint16_t new_tone = tone + brightness_increase;
+    uint16_t new_tone = tone - brightness_increase;
+    if (new_tone > 255) {
+        new_tone = 255;
     }
-
+    if (new_tone < 0) {
+        new_tone = 0;
+    }
     return (uint8_t)new_tone;
 }
 
@@ -132,24 +133,27 @@ uint32_t highlightPixel(int row, int col, uint32_t rgbColor) {
     return rgbColor;
 }
 
+uint32_t translateColor(Color colorValue) { 
+    switch (colorValue) {
+        case BLACK:   return strip.Color(0, 0, 0);
+        case WHITE:   return strip.Color(255, 255, 255);
+        case RED:     return strip.Color(255, 0, 0);
+        case GREEN:   return strip.Color(0, 255, 0);
+        case BLUE:    return strip.Color(0, 0, 255);
+        case YELLOW:  return strip.Color(255, 255, 0);
+        case CYAN:    return strip.Color(0, 255, 255);
+        case MAGENTA: return strip.Color(255, 0, 255);
+        default:     return strip.Color(0, 0, 0);
+    }
+}
+
 void drawMatrix() {
     for (int i = 0; i < MATRIX_HEIGHT; i++) {
         for (int j = 0; j < MATRIX_WIDTH; j++) {
             int pixelIndex = getPixelIndex(i, j);
             Color colorValue = (Color)displayArray[i][j];
-            uint32_t rgbColor;
+            uint32_t rgbColor = translateColor(colorValue);
 
-            switch (colorValue) {
-                case BLACK:   rgbColor = strip.Color(0, 0, 0); break;
-                case WHITE:   rgbColor = strip.Color(255, 255, 255); break;
-                case RED:     rgbColor = strip.Color(255, 0, 0); break;
-                case GREEN:   rgbColor = strip.Color(0, 255, 0); break;
-                case BLUE:    rgbColor = strip.Color(0, 0, 255); break;
-                case YELLOW:  rgbColor = strip.Color(255, 255, 0); break;
-                case CYAN:    rgbColor = strip.Color(0, 255, 255); break;
-                case MAGENTA: rgbColor = strip.Color(255, 0, 255); break;
-                default:      rgbColor = strip.Color(0, 0, 0); break;
-            }
             rgbColor = highlightPixel(i, j, rgbColor);
             strip.setPixelColor(pixelIndex, rgbColor);
         }

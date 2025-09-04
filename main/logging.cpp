@@ -1,4 +1,7 @@
 #include "logging.h"
+#include "declarations.h"
+
+// LOG_UDP_IP and LOG_UDP_PORT are defined in secrets.h
 
 void logInfo(String message){_logMessage("INFO: " + message);}
 void logWarning(String message){_logMessage("WARNING: " + message);}
@@ -12,17 +15,17 @@ void _logMessage(String message) {
     // Get board IP
     //String ipAddress = WiFi.localIP().toString();
 
-    if (WiFi.status() == WL_CONNECTED) {
-        udp.beginPacket(LOG_UDP_IP, LOG_UDP_PORT);
-        udp.write((const uint8_t*)message.c_str(), message.length());
-        udp.endPacket();
-    }
+    // if (WiFi.status() == WL_CONNECTED) {
+    //     udp.beginPacket(LOG_UDP_IP, LOG_UDP_PORT);
+    //     udp.write((const uint8_t*)message.c_str(), message.length());
+    //     udp.endPacket();
+    // }
 
     Serial.println(message);
 
     // log history buffer
     // Shift all existing messages down by one position
-    for (int i = LOG_BUFFER_Size - 1; i > 0; i--) {
+    for (int i = LOG_BUFFER_SIZE - 1; i > 0; i--) {
         logBuffer[i] = logBuffer[i - 1];
     }
 

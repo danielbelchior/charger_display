@@ -1,5 +1,6 @@
 #include "http_server.h"
 #include "logging.h"
+#include "display.h"
 
 void setupHttpServer() {
     server.begin();
@@ -34,6 +35,7 @@ void handleHttpRequests() {
         // Send HTTP headers
         client.println("HTTP/1.1 200 OK");
         client.println("Content-Type: application/json");
+        client.println("Access-Control-Allow-Origin: *");
         client.println("Connection: close");
         client.println();
 
@@ -60,7 +62,10 @@ void handleHttpRequests() {
         for (int i = 0; i < MATRIX_HEIGHT; i++) {
             JsonArray row = displayData.createNestedArray();
             for (int j = 0; j < MATRIX_WIDTH; j++) {
-                row.add(displayArray[i][j]);
+                Color colorValue = (Color)displayArray[i][j];
+                uint32_t rgbColor = translateColor(colorValue);
+                rgbColor = highlightPixel(i, j, rgbColor);
+                row.add(rgbColor);
             }
         }
 
@@ -73,14 +78,24 @@ void handleHttpRequests() {
         playSound();
         client.println("HTTP/1.1 200 OK");
         client.println("Content-Type: application/json");
+        client.println("Access-Control-Allow-Origin: *");
         client.println("Connection: close");
         client.println();
         client.print("{\"status\":\"ok\", \"action\":\"beep\"}");
 
     } else if (req.indexOf("GET /config/display_brightness/") != -1) {
-        String valueStr = req.substring(req.lastIndexOf('/') + 1);
+    req.replace(" HTTP/1.1", "");
+    String valueStr = req.substring(req.lastIndexOf('/') + 1);
+        int spaceIndex = valueStr.indexOf(' ');
+        if (spaceIndex != -1) {
+            valueStr = valueStr.substring(0, spaceIndex);
+        }
+        logDebug(req.substring(0, 100));
+        logDebug(req.substring(req.lastIndexOf('/') + 1));
+        
         int newBrightness = valueStr.toInt();
-        logInfo("HTTP GET /config/display_brightness/" + newBrightness + " request received.");
+        logInfo(String("HTTP GET /config/display_brightness/") + newBrightness + " request received.");
+        logInfo(String("Updating brightness from:") + displayBrightness + " to: " + newBrightness);
 
         if (newBrightness >= 0 && newBrightness <= 255) {
             displayBrightness = newBrightness;
@@ -89,19 +104,22 @@ void handleHttpRequests() {
 
             client.println("HTTP/1.1 200 OK");
             client.println("Content-Type: application/json");
+            client.println("Access-Control-Allow-Origin: *");
             client.println("Connection: close");
             client.println();
             client.print("{\"status\":\"ok\", \"variable\":\"displayBrightness\", \"new_value\":\"" + String(newBrightness) + "\"}");
         } else {
             client.println("HTTP/1.1 400 Bad Request");
             client.println("Content-Type: application/json");
+            client.println("Access-Control-Allow-Origin: *");
             client.println("Connection: close");
             client.println();
             client.print("{\"status\":\"error\", \"message\":\"Brightness value must be between 0 and 255.\"}");
         }
 
     } else if (req.indexOf("GET /config/update_state/") != -1) {
-        String temp = req.substring(req.indexOf("updatestate/") + 12);
+    req.replace(" HTTP/1.1", "");
+    String temp = req.substring(req.indexOf("updatestate/") + 12);
         int firstSlash = temp.indexOf('/');
         
         if (firstSlash != -1) {
@@ -113,13 +131,14 @@ void handleHttpRequests() {
             }
 
             int sensorId = idStr.toInt();
-            logInfo("HTTP GET /config/update_state/" + sensorId + "/" + stateStr + " request received.");
+            logInfo(String("HTTP GET /config/update_state/") + sensorId + "/" + stateStr + " request received.");
 
             if (sensorId == 1) {
                 sensor_1_state = stateStr;
                 logInfo("Manually updated sensor 1 state to: " + stateStr);
                 client.println("HTTP/1.1 200 OK");
                 client.println("Content-Type: application/json");
+                client.println("Access-Control-Allow-Origin: *");
                 client.println("Connection: close");
                 client.println();
                 client.print("{\"status\":\"ok\", \"sensor_id\":1, \"new_state\":\"" + stateStr + "\"}");
@@ -128,12 +147,14 @@ void handleHttpRequests() {
                 logInfo("Manually updated sensor 2 state to: " + stateStr);
                 client.println("HTTP/1.1 200 OK");
                 client.println("Content-Type: application/json");
+                client.println("Access-Control-Allow-Origin: *");
                 client.println("Connection: close");
                 client.println();
                 client.print("{\"status\":\"ok\", \"sensor_id\":2, \"new_state\":\"" + stateStr + "\"}");
             } else {
                 client.println("HTTP/1.1 400 Bad Request");
                 client.println("Content-Type: application/json");
+                client.println("Access-Control-Allow-Origin: *");
                 client.println("Connection: close");
                 client.println();
                 client.print("{\"status\":\"error\", \"message\":\"Invalid sensor_id. Must be 1 or 2.\"}");
@@ -142,6 +163,7 @@ void handleHttpRequests() {
             logWarning("HTTP/1.1 400 Bad Request");
             client.println("HTTP/1.1 400 Bad Request");
             client.println("Content-Type: application/json");
+            client.println("Access-Control-Allow-Origin: *");
             client.println("Connection: close");
             client.println();
             client.print("{\"status\":\"error\", \"message\":\"Malformed URL. Use /config/updatestate/<id>/<value>\"}");
@@ -152,6 +174,7 @@ void handleHttpRequests() {
         // Send 404 Not Found
         client.println("HTTP/1.1 404 Not Found");
         client.println("Content-Type: text/html");
+        client.println("Access-Control-Allow-Origin: *");
         client.println("Connection: close");
         client.println();
         client.println("<!DOCTYPE html><html><head><title>Not Found</title></head><body><h1>404 Not Found</h1></body></html>");

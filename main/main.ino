@@ -4,6 +4,7 @@
 #include "hass.h"
 #include "serial_commands.h"
 #include "http_server.h"
+#include <ESPmDNS.h>
 
 // --- Global Variable Definitions ---
 // The 'extern' declarations in declarations.h tell other files that these variables exist.
@@ -11,7 +12,7 @@
 
 // NeoPixel
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
-int displayBrightness = 2;
+int displayBrightness = 3;
 int displayArray[MATRIX_HEIGHT][MATRIX_WIDTH];
 
 // Home Assistant
@@ -47,16 +48,22 @@ int ledState = LOW;
 
 void connectToWifi() {
     logInfo("Connecting to WiFi...");
+    logInfo("SSID: " + String(WIFI_SSID));
+    logInfo("PASSWORD: " + String(WIFI_PASSWORD));
+
+    WiFi.setHostname("charger");
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     int retries = 0;
-    while (WiFi.status() != WL_CONNECTED && retries < 30) {
+    while (WiFi.status() != WL_CONNECTED && retries < 90) {
         delay(500);
+        yield();
         Serial.print(".");
         retries++;
     }
     if (WiFi.status() == WL_CONNECTED) {
         logInfo("WiFi connected!");
-        logInfo("IP address: " + WiFi.localIP().toString());
+        String ipStr = WiFi.localIP().toString();
+        logInfo("IP address: " + ipStr);
         wifi_connected = true;
     } else {
         logError("Failed to connect to WiFi.");
@@ -64,15 +71,16 @@ void connectToWifi() {
     }
 }
 
-void playSound() {
-    // Play two short beeps for any state change.
-    digitalWrite(BUZZER_PIN, LOW);
-    delay(100);
-    digitalWrite(BUZZER_PIN, HIGH);
-    delay(50);
-    digitalWrite(BUZZER_PIN, LOW);
-    delay(100);
-    digitalWrite(BUZZER_PIN, HIGH);
+void playSound(int beeps, int delayBetweenBeep, int duration) {
+    // Play 'beeps' short beeps for any state change.
+    for (int i = 0; i < beeps; i++) {
+        digitalWrite(BUZZER_PIN, LOW);
+        delay(duration);
+        digitalWrite(BUZZER_PIN, HIGH);
+        if (i < beeps - 1) {
+            delay(delayBetweenBeep);
+        }
+    }
 }
 
 
@@ -85,13 +93,36 @@ void setup() {
     pinMode(BUZZER_PIN, OUTPUT);
     digitalWrite(BUZZER_PIN, HIGH); // Keep buzzer OFF
 
+    // Play buzzer sound
+    playSound(2, 20, 50);
+
+    // Inicializa mDNS
+    if (!MDNS.begin("charger")) {
+        Serial.println("Error starting mDNS");
+    } else {
+        Serial.println("mDNS responder started: charger.local");
+    }
+
+
     // Initialize onboard LED
     pinMode(LED_BUILTIN, OUTPUT);
 
     setupDisplay();
     render_matrix(); // Initial render
     
+    // Print available RAM
+    #ifdef ESP8266
+        Serial.print("Free heap: ");
+        Serial.print(ESP.getFreeHeap());
+        Serial.println(" bytes");
+    #elif defined(ESP32)
+        Serial.print("Free heap: ");
+        Serial.print(ESP.getFreeHeap());
+        Serial.println(" bytes");
+    #endif
+
     connectToWifi();
+    playSound(3, 20, 50);
 
     if (wifi_connected) {
         logInfo("Loading initial state of sensors");

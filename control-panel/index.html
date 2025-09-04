@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Matrix 8x8 — charger.home</title>
+<style>
+  :root { --cell-size: 24px; --gap: 2px; }
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 20px; }
+  h1 { font-size: 18px; margin: 0 0 12px; }
+  #grid {
+    display: grid;
+    grid-template-columns: repeat(8, var(--cell-size));
+    grid-template-rows: repeat(8, var(--cell-size));
+    gap: var(--gap);
+    width: calc(8 * var(--cell-size) + 7 * var(--gap));
+  }
+  .cell {
+    width: var(--cell-size);
+    height: var(--cell-size);
+    border-radius: 6px;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.1);
+  }
+  #status { margin-top: 10px; font-size: 12px; color: #555; }
+  #logs {
+    margin-top: 2px;
+    padding: 2px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background: #f9f9f9;
+    max-height: 440px;
+    overflow-y: auto;
+    font-size: 13px;
+    line-height: 1.4;
+    white-space: pre-wrap;
+  }
+  #logs ul {
+    margin: 0;
+    padding-left: 16px;
+  }
+  #logs li {
+    margin: 2px 0;
+    font-family: monospace;
+  }
+  /* cores por nível */
+  .log-info { color: #2e7d32; }     /* verde */
+  .log-warning { color: #ef6c00; }  /* laranja */
+  .log-error { color: #c62828; }    /* vermelho */
+  .log-debug { color: #616161; }    /* cinza */
+</style>
+</head>
+<body>
+  <h1>Matrix 8×8 — charger.home</h1>
+  <div id="grid"></div>
+  <div id="status">Aguardando dados…</div>
+
+  <div id="logs">
+    <ul id="logList"></ul>
+  </div>
+
+<script>
+  const URL = 'http://charger.home/status';
+  const gridEl = document.getElementById('grid');
+  const statusEl = document.getElementById('status');
+  const logList = document.getElementById('logList');
+
+  // Cria 64 células fixas
+  const cells = Array.from({ length: 64 }, () => {
+    const div = document.createElement('div');
+    div.className = 'cell';
+    gridEl.appendChild(div);
+    return div;
+  });
+
+  // Converte inteiro 0xAARRGGBB em string CSS "rgb(r,g,b)"
+  function intToRgb(colorInt) {
+    const r = (colorInt >> 16) & 0xff;
+    const g = (colorInt >> 8) & 0xff;
+    const b = colorInt & 0xff;
+    return `rgb(${r},${g},${b})`;
+  }
+
+  function classifyLog(msg) {
+    if (msg.startsWith("INFO:")) return "log-info";
+    if (msg.startsWith("WARNING:")) return "log-warning";
+    if (msg.startsWith("ERROR:")) return "log-error";
+    if (msg.startsWith("DEBUG:")) return "log-debug";
+    return "";
+  }
+
+  async function fetchMatrix() {
+    const started = Date.now();
+    try {
+      const res = await fetch(URL, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      // --- Atualiza Display ---
+      if (!data || !Array.isArray(data.displayArray) || data.displayArray.length !== 8) {
+        throw new Error('Formato inválido: "displayArray" deve ser 8 linhas.');
+      }
+
+      let idx = 0;
+      for (let r = 0; r < 8; r++) {
+        const row = data.displayArray[r];
+        if (!Array.isArray(row) || row.length !== 8) {
+          throw new Error(`Linha ${r} inválida: deve ter 8 colunas.`);
+        }
+        for (let c = 0; c < 8; c++, idx++) {
+          const colorInt = row[c];
+          cells[idx].style.background = intToRgb(colorInt);
+        }
+      }
+
+      // --- Atualiza Logs ---
+      if (Array.isArray(data.logBuffer)) {
+        const logs = [...data.logBuffer].reverse();
+        logList.innerHTML = '';
+        logs.forEach((msg) => {
+          const li = document.createElement('li');
+          li.textContent = msg;
+          li.className = classifyLog(msg);
+          logList.appendChild(li);
+        });
+      }
+
+      const ms = Date.now() - started;
+      statusEl.textContent = `OK — ${new Date().toLocaleTimeString()} (em ${ms} ms)`;
+    } catch (err) {
+      statusEl.textContent = `Erro: ${err.message}`;
+      cells.forEach((cell) => (cell.style.background = '#222'));
+    }
+  }
+
+  // Atualiza a cada 1s
+  fetchMatrix();
+  setInterval(fetchMatrix, 1000);
+</script>
+</body>
+</html>

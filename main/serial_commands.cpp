@@ -44,8 +44,8 @@ void handleSerialCommands() {
             playSound();
         } else if (command == "logs") {
             Serial.println(F("--- Last Messages ---"));
-            // To print in chronological order (oldest to newest)
-            // With the new method, the oldest is at the end of the array.
+            // Print in chronological order (oldest to newest)
+            // The oldest is at the end of the array.
             for (int i = LOG_BUFFER_SIZE - 1; i >= 0; i--) {
                 if (logBuffer[i] != "") {
                     // Print a counter for readability

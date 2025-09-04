@@ -73,7 +73,7 @@ extern String logBuffer[LOG_BUFFER_SIZE];
 
 // --- Function Prototypes for main.ino ---
 // Functions that are in main.ino but called from other files
-void playSound();
+void playSound(int beeps = 2, int delayBetweenBeep = 50, int duration = 100);
 void connectToWifi();
 
 
