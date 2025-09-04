@@ -14,6 +14,6 @@
 #define SENSOR_1_ENTITY_ID "sensor.XXX"
 #define SENSOR_2_ENTITY_ID "sensor.XXX"
 
-// Graylog UDP endpoint
-#define graylog_ip "GRAYLOG_IP"
-#define graylog_port 12201
+// Log UDP endpoint
+#define LOG_UDP_IP "UDP SERVER IP"
+#define LOG_UDP_PORT 12201
