@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Log Viewer</title>
+    <style>
+        body { font-family: sans-serif; background-color: #f4f4f4; color: #333; }
+        h1 { text-align: center; }
+        #logs {
+            border: 1px solid #ccc;
+            background-color: #fff;
+            padding: 10px;
+            margin: 20px;
+            height: 60vh;
+            overflow-y: scroll;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>Live Log Viewer</h1>
+    <div id="logs">Connecting to log stream...</div>
+
+    <script>
+        const logsDiv = document.getElementById('logs');
+
+        async function fetchLogs() {
+            try {
+                const response = await fetch('/logs');
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                logsDiv.textContent = ''; // Clear connecting message
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) {
+                        logsDiv.textContent += '\n--- Connection closed ---';
+                        break;
+                    }
+                    const chunk = decoder.decode(value, { stream: true });
+                    logsDiv.textContent += chunk;
+                    logsDiv.scrollTop = logsDiv.scrollHeight; // Auto-scroll
+                }
+            } catch (error) {
+                logsDiv.textContent = 'Error connecting to log stream. Retrying in 5 seconds...';
+                console.error('Error fetching logs:', error);
+                setTimeout(fetchLogs, 5000);
+            }
+        }
+
+        fetchLogs();
+    </script>
+</body>
+</html>
