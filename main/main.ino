@@ -15,6 +15,16 @@
 
 #define LED_COUNT    (MATRIX_WIDTH * MATRIX_HEIGHT)
 
+// GRAYLOG log sender
+#define LOG_EMERGENCY 0
+#define LOG_ALERT     1
+#define LOG_CRITICAL  2
+#define LOG_ERROR     3
+#define LOG_WARNING   4
+#define LOG_NOTICE    5
+#define LOG_INFO      6
+#define LOG_DEBUG     7
+
 // Initialize NeoPixel object
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
@@ -80,6 +90,44 @@ void getNextBorderPoint() {
     }
 
     highlightIndex = (highlightIndex + 1) % BORDER_POINTS;
+}
+
+void logMessage(String message, int level = LOG_INFO) {
+    // Log levels
+    // Level	Name
+    // 0	Emergency
+    // 1	Alert
+    // 2	Critical
+    // 3	Error
+    // 4	Warning
+    // 5	Notice
+    // 6	Informational
+    // 7	Debug
+
+    // Sanitize message (avoid breaking JSON)
+    message.replace("\"", "'");
+    message.replace("\n", " "); 
+
+    // Get board IP
+    String ipAddress = WiFi.localIP().toString();
+
+    // GELF JSON
+    String gelfMessage = "{"
+    "\"version\":\"1.1\","
+    "\"host\":\"ESP32\","
+    "\"short_message\":\"" + message + "\","
+    "\"level\":" + String(level) + ","
+    "\"timestamp\":" + String(millis() / 1000.0, 3) + ","
+    "\"_ip\":\"" + ipAddress + "\""
+    "}";
+
+    if (WiFi.status() == WL_CONNECTED) {
+        udp.beginPacket(GRAYLOG_IP, GRAYLOG_PORT);
+        udp.write((const uint8_t*)gelfMessage.c_str(), gelfMessage.length());
+        udp.endPacket();
+    }
+
+    Serial.println(message);
 }
 
 void createArray8x8() {
@@ -251,21 +299,19 @@ void drawMatrix() {
 // --- Home Assistant & WiFi Functions ---
 
 void onMessage(WebsocketsMessage message) {
-    Serial.print("Got Message: ");
-    Serial.println(message.data());
+    logMessage("Got Message: " + message.data());
 
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, message.data());
     if (error) {
-        Serial.print(F("deserializeJson() failed: "));
-        Serial.println(error.c_str());
+        logMessage("deserializeJson() failed: " + String(error.c_str()));
         return;
     }
 
     const char* type = doc["type"];
 
     if (strcmp(type, "auth_required") == 0) {
-        Serial.println("Auth required, sending token...");
+        logMessage("Auth required, sending token...");
         JsonDocument auth_msg;
         auth_msg["type"] = "auth";
         auth_msg["access_token"] = HASS_TOKEN;
@@ -273,8 +319,8 @@ void onMessage(WebsocketsMessage message) {
         serializeJson(auth_msg, auth_str);
         client.send(auth_str);
     } else if (strcmp(type, "auth_ok") == 0) {
-        Serial.println("Auth OK!");
-        
+        logMessage("Auth OK!");
+
         // Subscribe to sensor 1
         JsonDocument sub_msg_1;
         sub_msg_1["id"] = hass_message_id++;
@@ -285,8 +331,7 @@ void onMessage(WebsocketsMessage message) {
         String sub_str_1;
         serializeJson(sub_msg_1, sub_str_1);
         client.send(sub_str_1);
-        Serial.print("Subscribing to ");
-        Serial.println(SENSOR_1_ENTITY_ID);
+        logMessage("Subscribing to " + String(SENSOR_1_ENTITY_ID));
 
         // Subscribe to sensor 2
         JsonDocument sub_msg_2;
@@ -298,11 +343,10 @@ void onMessage(WebsocketsMessage message) {
         String sub_str_2;
         serializeJson(sub_msg_2, sub_str_2);
         client.send(sub_str_2);
-        Serial.print("Subscribing to ");
-        Serial.println(SENSOR_2_ENTITY_ID);
+        logMessage("Subscribing to " + String(SENSOR_2_ENTITY_ID));
 
     } else if (strcmp(type, "auth_invalid") == 0) {
-        Serial.println("Auth invalid. Check your HASS_TOKEN.");
+        logMessage("Auth invalid. Check your HASS_TOKEN.");
     } else if (strcmp(type, "event") == 0) {
         JsonObject event = doc["event"];
         JsonObject variables = event["variables"];
@@ -312,41 +356,38 @@ void onMessage(WebsocketsMessage message) {
 
         if (strcmp(entity_id, SENSOR_1_ENTITY_ID) == 0) {
             sensor_1_state = state;
-            Serial.print("Sensor 1 state updated: ");
-            Serial.println(sensor_1_state);
+            logMessage("Sensor 1 state updated: " + String(sensor_1_state));
             playSound();
         } else if (strcmp(entity_id, SENSOR_2_ENTITY_ID) == 0) {
             sensor_2_state = state;
-            Serial.print("Sensor 2 state updated: ");
+            logMessage("Sensor 2 state updated: " + String(sensor_2_state));
             Serial.println(sensor_2_state);
             playSound();
         }
     } else if (strcmp(type, "result") == 0) {
         if (doc["success"] == true) {
-            Serial.print("Subscription successful for ID: ");
-            Serial.println(doc["id"].as<int>());
+            logMessage("Subscription successful for ID: " + String(doc["id"].as<int>()));
         } else {
-            Serial.print("Subscription failed for ID: ");
-            Serial.println(doc["id"].as<int>());
+            logMessage("Subscription failed for ID: " + String(doc["id"].as<int>()));
             JsonObject error = doc["error"];
-            Serial.print("Error: ");
-            Serial.println(error["message"].as<const char*>());
+            logMessage("Error: " + String(error["message"].as<const char*>()));
         }
     }
 }
 
 void onEvent(WebsocketsEvent event, String data) {
     if(event == WebsocketsEvent::ConnectionOpened) {
-        Serial.println("Websocket connection opened");
+        logMessage("Websocket connection opened");
+
         ws_connected = true;
     } else if(event == WebsocketsEvent::ConnectionClosed) {
-        Serial.println("Websocket connection closed");
+        logMessage("Websocket connection closed");
         ws_connected = false;
     }
 }
 
 void connectToWifi() {
-    Serial.print("Connecting to WiFi...");
+    logMessage("Connecting to WiFi...");
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     // Don't block forever
     int retries = 0;
@@ -356,12 +397,11 @@ void connectToWifi() {
         retries++;
     }
     if (WiFi.status() == WL_CONNECTED) {
-        Serial.println("\nWiFi connected!");
-        Serial.print("IP address: ");
-        Serial.println(WiFi.localIP());
+        logMessage("WiFi connected!");
+        logMessage("IP address: " + WiFi.localIP().toString());
         wifi_connected = true;
     } else {
-        Serial.println("\nFailed to connect to WiFi.");
+        logMessage("Failed to connect to WiFi.", 3);
         wifi_connected = false;
     }
 }
@@ -416,7 +456,7 @@ void clean_display() {
     createArray8x8();
     strip.clear();
     strip.show();
-    Serial.println(F("Display cleared"));
+    logMessage(F("Display cleared"));
 }
 
 Color stringToColor(String colorName) {
@@ -438,10 +478,10 @@ void handleSerialCommands() {
         command.trim();
         if (command == "render true") {
             should_render = true;
-            Serial.println(F("Rendering enabled"));
+            logMessage(F("Rendering enabled"));
         } else if (command == "render false") {
             should_render = false;
-            Serial.println(F("Rendering disabled"));
+            logMessage(F("Rendering disabled"));
         } else if (command == "clean") {
             clean_display();
         } else if (command.startsWith("draw ")) {
@@ -467,10 +507,10 @@ void handleSerialCommands() {
                 Serial.print(F(") with color "));
                 Serial.println(color_str);
             } else {
-                Serial.println(F("Invalid draw command. Format: draw x y color"));
+                logMessage(F("Invalid draw command. Format: draw x y color"));
             }
         } else if (command == "sound") {
-            Serial.println(F("Playing sound..."));
+            logMessage(F("Playing sound..."));
             playSound();
         }
     }
@@ -493,14 +533,17 @@ void setup() {
     connectToWifi();
 
     if (wifi_connected) {
-        Serial.println("Loading initial state of sensors");
+        logMessage("Loading initial state of sensors");
         sensor_1_state = getEntityState(SENSOR_1_ENTITY_ID);
         sensor_2_state = getEntityState(SENSOR_2_ENTITY_ID);
+        logMessage("Sensor 1 state: " + sensor_1_state);
+        logMessage("Sensor 2 state: " + sensor_2_state);
 
-        Serial.println("Websocket connecting");
+        logMessage("Websocket connecting");
         client.onMessage(onMessage);
         client.onEvent(onEvent);
         client.connect(HASS_HOST, HASS_PORT, "/api/websocket");
+        logMessage("Websocket connected");
     }
 }
 
@@ -522,10 +565,10 @@ void loop() {
         wifi_connected = false; // Update our flag
         sensor_1_state = "unknown";
         sensor_2_state = "unknown";
-        Serial.println("WiFi disconnected, trying to reconnect...");
+        logMessage("WiFi disconnected, trying to reconnect...");
         connectToWifi();
         if (wifi_connected) { // If reconnection was successful, re-init the client
-            Serial.println("Wifi reconnected!");
+            logMessage("Wifi reconnected!");
             client.onMessage(onMessage);
             client.onEvent(onEvent);
             client.connect(HASS_HOST, HASS_PORT, "/api/websocket");
@@ -537,7 +580,7 @@ void loop() {
         if (!ws_connected) {
             sensor_1_state = "unknown";
             sensor_2_state = "unknown";
-            Serial.println("Websocket disconnected, trying to reconnect...");
+            logMessage("Websocket disconnected, trying to reconnect...");
             // Attempt to reconnect. The client.poll() below will handle the connection process.
             client.connect(HASS_HOST, HASS_PORT, "/api/websocket");
         }
