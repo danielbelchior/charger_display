@@ -21,6 +21,7 @@ using namespace websockets;
 #define BUZZER_PIN    13
 #define LED_BUILTIN   2
 #define LED_COUNT    (MATRIX_WIDTH * MATRIX_HEIGHT)
+#define HTTP_PORT    80
 
 // --- Logging ---
 #define LOG_BUFFER_SIZE 20
@@ -56,6 +57,7 @@ extern bool ws_connected;
 // WiFi
 extern WiFiUDP udp;
 extern bool wifi_connected;
+extern WiFiServer server;
 
 // State & Timing
 extern int chargingRow;

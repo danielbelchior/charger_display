@@ -3,6 +3,7 @@
 #include "display.h"
 #include "hass.h"
 #include "serial_commands.h"
+#include "http_server.h"
 
 // --- Global Variable Definitions ---
 // The 'extern' declarations in declarations.h tell other files that these variables exist.
@@ -21,6 +22,7 @@ String sensor_2_state = "unknown";
 bool ws_connected = false;
 
 // WiFi
+WiFiServer server(HTTP_PORT);
 WiFiUDP udp;
 bool wifi_connected = false;
 
@@ -98,6 +100,8 @@ void setup() {
         logInfo("Websocket connecting");
         setupHass();
         logInfo("Websocket connected");
+
+        setupHttpServer();
     }
 }
 
@@ -118,6 +122,7 @@ void loop() {
     }
 
     handleSerialCommands();
+    handleHttpRequests();
 
     // --- Connection Management ---
     if (WiFi.status() != WL_CONNECTED) {
