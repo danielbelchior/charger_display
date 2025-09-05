@@ -18,6 +18,7 @@ void getNextBorderPoint();
 void updateItem(int row, int col, Color color);
 void drawBorder();
 void noWifi(int row);
+void noHass(int row);
 
 // State-specific Patterns
 void state_unknown(int bike, int row);

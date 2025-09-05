@@ -5,6 +5,8 @@
 #include "serial_commands.h"
 #include "http_server.h"
 #include <ESPmDNS.h>
+// OTA
+#include "ota.h"
 
 // --- Global Variable Definitions ---
 // The 'extern' declarations in declarations.h tell other files that these variables exist.
@@ -64,6 +66,17 @@ void connectToWifi() {
         logInfo("WiFi connected!");
         String ipStr = WiFi.localIP().toString();
         logInfo("IP address: " + ipStr);
+        
+        logInfo("mDNS.begin charger.local");
+        if (!MDNS.begin("charger")) {
+            logError("Error starting mDNS");
+        } else {
+            logInfo("mDNS responder started: charger.local");
+        }
+
+        logInfo("OTA initialization");
+        setupOTA("charger");
+
         wifi_connected = true;
     } else {
         logError("Failed to connect to WiFi.");
@@ -88,6 +101,7 @@ void playSound(int beeps, int delayBetweenBeep, int duration) {
 
 void setup() {
     Serial.begin(115200);
+    // setupOTA("charger");
 
     // Initialize buzzer pin
     pinMode(BUZZER_PIN, OUTPUT);
@@ -96,35 +110,18 @@ void setup() {
     // Play buzzer sound
     playSound(2, 20, 50);
 
-    // Inicializa mDNS
-    if (!MDNS.begin("charger")) {
-        Serial.println("Error starting mDNS");
-    } else {
-        Serial.println("mDNS responder started: charger.local");
-    }
-
-
     // Initialize onboard LED
     pinMode(LED_BUILTIN, OUTPUT);
 
     setupDisplay();
     render_matrix(); // Initial render
-    
-    // Print available RAM
-    #ifdef ESP8266
-        Serial.print("Free heap: ");
-        Serial.print(ESP.getFreeHeap());
-        Serial.println(" bytes");
-    #elif defined(ESP32)
-        Serial.print("Free heap: ");
-        Serial.print(ESP.getFreeHeap());
-        Serial.println(" bytes");
-    #endif
 
     connectToWifi();
     playSound(3, 20, 50);
 
+
     if (wifi_connected) {
+        render_matrix();
         logInfo("Loading initial state of sensors");
         getEntitiesState();
 
@@ -152,6 +149,9 @@ void loop() {
         digitalWrite(LED_BUILTIN, ledState);
     }
 
+    // Handle OTA updates
+    handleOTA();
+
     handleSerialCommands();
     handleHttpRequests();
 
@@ -162,9 +162,11 @@ void loop() {
         sensor_1_state = "unknown";
         sensor_2_state = "unknown";
         logWarning("WiFi disconnected, trying to reconnect...");
+        render_matrix();
         connectToWifi();
         if (wifi_connected) {
             logInfo("Wifi reconnected!");
+            render_matrix();
             getEntitiesState();
             // Re-init the HASS connection
             setupHass();

@@ -87,11 +87,23 @@ void state_disconnected(int bike, int row) {
 }
 
 void noWifi(int row) {
-    updateItem(0, 0, BLUE);
-    updateItem(0, 7, RED);
+    Color pixelColor = (row % 2 == 0) ? BLUE : RED;
+    updateItem(0, 0, pixelColor);
+    
     for (int r = 1; r < 8; r += 2) {
         for (int c = r; c < 8; c++) {
             updateItem(c, (7 - r), RED);
+        }
+    }
+}
+
+void noHass(int row) {
+    Color pixelColor = (row % 2 == 0) ? GREEN : YELLOW;
+    updateItem(0, 0, pixelColor);
+    
+    for (int r = 1; r < 8; r += 2) {
+        for (int c = r; c < 8; c++) {
+            updateItem(c, (7 - r), BLUE);
         }
     }
 }
@@ -103,7 +115,7 @@ int getPixelIndex(int row, int col) {
 
 uint8_t highlightBrightness(uint8_t tone) {
     // Add a fixed value to each color component to make it visibly brighter.
-    const uint8_t brightness_increase = 80;
+    const uint8_t brightness_increase = 50;
     //uint16_t new_tone = tone + brightness_increase;
     uint16_t new_tone = tone - brightness_increase;
     if (new_tone > 255) {
@@ -165,7 +177,7 @@ void render_matrix() {
     // Clean the display array
     createArray8x8();
 
-    if (wifi_connected) {
+    if (wifi_connected && ws_connected) {
         drawBorder();
 
         if (sensor_1_state == "charging") {
@@ -183,7 +195,8 @@ void render_matrix() {
         } else if (sensor_2_state == "unknown") {
             state_unknown(2, chargingRow);
         }
-
+    } else if (wifi_connected && !ws_connected) {
+        noHass(chargingRow);
     } else {
         noWifi(chargingRow);
     }

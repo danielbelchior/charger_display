@@ -50,6 +50,7 @@ void handleHttpRequests() {
         jsonDoc["sensor_2_state"] = sensor_2_state;
         jsonDoc["displayBrightness"] = displayBrightness;
         jsonDoc["should_render"] = should_render;
+        jsonDoc["free_heap"] = ESP.getFreeHeap();
 
         JsonArray logData = jsonDoc.createNestedArray("logBuffer");
         for (int i = 0; i < LOG_BUFFER_SIZE; i++) {
