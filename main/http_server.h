@@ -5,5 +5,6 @@
 
 void setupHttpServer();
 void handleHttpRequests();
+void handleWebSocket();
 
 #endif // HTTP_SERVER_H

@@ -42,6 +42,9 @@ enum Color {
 // By declaring these as 'extern', we tell other .cpp files that these variables exist somewhere else (in main.ino).
 // This allows them to be shared across files.
 
+// OTA update
+extern bool ota_in_progress;
+
 // NeoPixel
 extern Adafruit_NeoPixel strip;
 extern int displayBrightness;

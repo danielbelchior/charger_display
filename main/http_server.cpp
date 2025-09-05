@@ -1,10 +1,18 @@
 #include "http_server.h"
 #include "logging.h"
 #include "display.h"
+#include <WebSocketsServer.h>
+
+WebSocketsServer webSocket = WebSocketsServer(81); // WebSocket on port 81
+
+void handleWebSocketEvents(uint8_t num, WStype_t type, uint8_t * payload, size_t length);
 
 void setupHttpServer() {
     server.begin();
     logInfo("HTTP server started on port 80");
+    webSocket.begin();
+    logInfo("WebSocket server started on port 81");
+    webSocket.onEvent(handleWebSocketEvents);
 }
 
 void handleHttpRequests() {
@@ -184,4 +192,55 @@ void handleHttpRequests() {
     delay(1); // Give the client time to receive the data
     client.stop();
     // logInfo("HTTP client disconnected.");
+}
+
+void handleWebSocketStatus(uint8_t num) {
+    DynamicJsonDocument jsonDoc(4096);
+    jsonDoc["uptime"] = millis() / 1000;
+    jsonDoc["ip_address"] = WiFi.localIP().toString();
+    jsonDoc["wifi_connected"] = wifi_connected;
+    jsonDoc["ws_connected"] = ws_connected;
+    jsonDoc["sensor_1_state"] = sensor_1_state;
+    jsonDoc["sensor_2_state"] = sensor_2_state;
+    jsonDoc["displayBrightness"] = displayBrightness;
+    jsonDoc["should_render"] = should_render;
+    jsonDoc["free_heap"] = ESP.getFreeHeap();
+
+    JsonArray logData = jsonDoc.createNestedArray("logBuffer");
+    for (int i = 0; i < LOG_BUFFER_SIZE; i++) {
+        if (logBuffer[i] != "") {
+            logData.add(logBuffer[i]);
+        }
+    }
+
+    JsonArray displayData = jsonDoc.createNestedArray("displayArray");
+    for (int i = 0; i < MATRIX_HEIGHT; i++) {
+        JsonArray row = displayData.createNestedArray();
+        for (int j = 0; j < MATRIX_WIDTH; j++) {
+            Color colorValue = (Color)displayArray[i][j];
+            uint32_t rgbColor = translateColor(colorValue);
+            rgbColor = highlightPixel(i, j, rgbColor);
+            row.add(rgbColor);
+        }
+    }
+
+    String response;
+    serializeJson(jsonDoc, response);
+    webSocket.sendTXT(num, response);
+}
+
+void handleWebSocketEvents(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
+    switch(type) {
+        case WStype_TEXT:
+            if (length > 0 && strncmp((char*)payload, "status", 6) == 0) {
+                handleWebSocketStatus(num);
+            }
+            break;
+        default:
+            break;
+    }
+}
+
+void handleWebSocket() {
+    webSocket.loop();
 }

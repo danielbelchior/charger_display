@@ -1,5 +1,6 @@
 #include "display.h"
 #include "logging.h"
+#include "declarations.h"
 
 // This function will be called from the main setup()
 void setupDisplay() {
@@ -108,6 +109,16 @@ void noHass(int row) {
     }
 }
 
+void otaInProgress() {
+    for (int y = 0; y < 8; y++) {
+        for (int x = 0; x < 8; x++) {
+            if ((x + y) % 2 == 0) {
+                updateItem(x, y, YELLOW);
+            }
+        }
+    }
+}
+
 int getPixelIndex(int row, int col) {
     // Simplified from serpentine layout to standard left-to-right wiring to fix pixel scrambling.
     return (row * MATRIX_WIDTH) + col;
@@ -177,7 +188,9 @@ void render_matrix() {
     // Clean the display array
     createArray8x8();
 
-    if (wifi_connected && ws_connected) {
+    if (ota_in_progress) {
+        otaInProgress();
+    } else if (wifi_connected && ws_connected) {
         drawBorder();
 
         if (sensor_1_state == "charging") {

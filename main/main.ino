@@ -7,6 +7,8 @@
 #include <ESPmDNS.h>
 // OTA
 #include "ota.h"
+// Utility
+#include "util.h"
 
 // --- Global Variable Definitions ---
 // The 'extern' declarations in declarations.h tell other files that these variables exist.
@@ -40,6 +42,7 @@ const unsigned long interval = 1000; // 1 second
 
 // Logging
 String logBuffer[LOG_BUFFER_SIZE];
+bool ota_in_progress = false;
 
 // Onboard LED heartbeat
 int loopIterations = 0;
@@ -84,17 +87,6 @@ void connectToWifi() {
     }
 }
 
-void playSound(int beeps, int delayBetweenBeep, int duration) {
-    // Play 'beeps' short beeps for any state change.
-    for (int i = 0; i < beeps; i++) {
-        digitalWrite(BUZZER_PIN, LOW);
-        delay(duration);
-        digitalWrite(BUZZER_PIN, HIGH);
-        if (i < beeps - 1) {
-            delay(delayBetweenBeep);
-        }
-    }
-}
 
 
 // --- Main Functions ---
@@ -141,6 +133,13 @@ void getEntitiesState() {
 }
 
 void loop() {
+    
+    // Handle OTA updates
+    handleOTA();
+    if (ota_in_progress){
+        return;
+    }
+
     // Toggle onboard LED as a heartbeat
     loopIterations++;
     if (loopIterations > 1500){
@@ -149,11 +148,9 @@ void loop() {
         digitalWrite(LED_BUILTIN, ledState);
     }
 
-    // Handle OTA updates
-    handleOTA();
-
     handleSerialCommands();
     handleHttpRequests();
+    handleWebSocket();
 
     // --- Connection Management ---
     if (WiFi.status() != WL_CONNECTED) {
