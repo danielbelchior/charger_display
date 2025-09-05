@@ -1,140 +1,215 @@
-<!doctype html>
-<html lang="pt-BR">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Matrix 8x8 — charger.home</title>
-<style>
-  :root { --cell-size: 24px; --gap: 2px; }
-  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 20px; }
-  h1 { font-size: 18px; margin: 0 0 12px; }
-  #grid {
-    display: grid;
-    grid-template-columns: repeat(8, var(--cell-size));
-    grid-template-rows: repeat(8, var(--cell-size));
-    gap: var(--gap);
-    width: calc(8 * var(--cell-size) + 7 * var(--gap));
-  }
-  .cell {
-    width: var(--cell-size);
-    height: var(--cell-size);
-    border-radius: 6px;
-    box-shadow: inset 0 0 0 1px rgba(0,0,0,.1);
-  }
-  #status { margin-top: 10px; font-size: 12px; color: #555; }
-  #logs {
-    margin-top: 2px;
-    padding: 2px;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    background: #f9f9f9;
-    max-height: 440px;
-    overflow-y: auto;
-    font-size: 13px;
-    line-height: 1.4;
-    white-space: pre-wrap;
-  }
-  #logs ul {
-    margin: 0;
-    padding-left: 16px;
-  }
-  #logs li {
-    margin: 2px 0;
-    font-family: monospace;
-  }
-  /* cores por nível */
-  .log-info { color: #2e7d32; }     /* verde */
-  .log-warning { color: #ef6c00; }  /* laranja */
-  .log-error { color: #c62828; }    /* vermelho */
-  .log-debug { color: #616161; }    /* cinza */
-</style>
+  <meta charset="UTF-8">
+  <title>Charger Display</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .log-info { color: green; }
+    .log-warning { color: orange; }
+    .log-error { color: red; }
+    .log-debug { color: gray; }
+  </style>
 </head>
-<body>
-  <h1>Matrix 8×8 — charger.home</h1>
-  <div id="grid"></div>
-  <div id="status">Aguardando dados…</div>
+<body class="flex flex-col items-center justify-center min-h-screen bg-gray-100 space-y-6 p-4">
 
-  <div id="logs">
-    <ul id="logList"></ul>
+  <!-- Matrix + Status -->
+  <div class="flex space-x-6 bg-white p-4 rounded-lg shadow-md">
+    <!-- Matrix -->
+    <div>
+      <h2 class="text-lg font-semibold mb-2">Display</h2>
+      <div id="matrix" class="grid grid-cols-8 gap-1"></div>
+    </div>
+
+    <!-- Status Info -->
+    <div class="space-y-2">
+      <h2 class="text-lg font-semibold mb-2">Status</h2>
+      <div><strong>Uptime:</strong> <span id="uptime">-</span></div>
+      <div><strong>IP Address:</strong> <span id="ip_address">-</span></div>
+      <div><strong>WS Connected:</strong> <span id="ws_connected">-</span></div>
+      <div><strong>Free Heap:</strong> <span id="free_heap">-</span></div>
+
+      <!-- Editable Controls -->
+      <div>
+        <label class="font-semibold">Sensor 1 State:</label>
+        <select id="sensor_1_state" class="border rounded p-1">
+          <option value="unknown">unknown</option>
+          <option value="off">off</option>
+          <option value="disconnected">disconnected</option>
+          <option value="charging">charging</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="font-semibold">Sensor 2 State:</label>
+        <select id="sensor_2_state" class="border rounded p-1">
+          <option value="unknown">unknown</option>
+          <option value="off">off</option>
+          <option value="disconnected">disconnected</option>
+          <option value="charging">charging</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="font-semibold">Display Brightness:</label>
+        <input id="displayBrightness" type="range" min="1" max="100" class="w-40" />
+        <span id="brightnessValue">-</span>
+      </div>
+    </div>
   </div>
 
-<script>
-  const URL = 'http://charger.home/status';
-  const gridEl = document.getElementById('grid');
-  const statusEl = document.getElementById('status');
-  const logList = document.getElementById('logList');
+  <!-- Logs -->
+  <div class="bg-gray-50 p-2 rounded-lg shadow-md max-w-3xl w-full">
+    <h2 class="text-sm font-semibold mb-1">Logs</h2>
+    <div id="logs" class="font-mono text-xs space-y-1 max-h-80 overflow-y-auto"></div>
+  </div>
 
-  // Cria 64 células fixas
-  const cells = Array.from({ length: 64 }, () => {
-    const div = document.createElement('div');
-    div.className = 'cell';
-    gridEl.appendChild(div);
-    return div;
-  });
+  <script>
+    let ws;
+    let statusInterval;
+    let messagesThisSecond = 0;
 
-  // Converte inteiro 0xAARRGGBB em string CSS "rgb(r,g,b)"
-  function intToRgb(colorInt) {
-    const r = (colorInt >> 16) & 0xff;
-    const g = (colorInt >> 8) & 0xff;
-    const b = colorInt & 0xff;
-    return `rgb(${r},${g},${b})`;
-  }
+    function connectWebSocket() {
+      ws = new WebSocket("ws://charger.home:81/");
 
-  function classifyLog(msg) {
-    if (msg.startsWith("INFO:")) return "log-info";
-    if (msg.startsWith("WARNING:")) return "log-warning";
-    if (msg.startsWith("ERROR:")) return "log-error";
-    if (msg.startsWith("DEBUG:")) return "log-debug";
-    return "";
-  }
+      ws.onopen = () => {
+        console.log("✅ WebSocket connected");
+        ws.send("status");
 
-  async function fetchMatrix() {
-    const started = Date.now();
-    try {
-      const res = await fetch(URL, { cache: 'no-store' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+        // envia status a cada 1s
+        statusInterval = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send("status");
+          }
+        }, 1000);
+      };
 
-      // --- Atualiza Display ---
-      if (!data || !Array.isArray(data.displayArray) || data.displayArray.length !== 8) {
-        throw new Error('Formato inválido: "displayArray" deve ser 8 linhas.');
-      }
+      ws.onmessage = (event) => {
+        messagesThisSecond++;
 
-      let idx = 0;
-      for (let r = 0; r < 8; r++) {
-        const row = data.displayArray[r];
-        if (!Array.isArray(row) || row.length !== 8) {
-          throw new Error(`Linha ${r} inválida: deve ter 8 colunas.`);
+        try {
+          const data = JSON.parse(event.data);
+
+          // Atualizar status readonly
+            // Format uptime as days/hours/minutes
+            if (typeof data.uptime === "number") {
+              const totalSeconds = data.uptime;
+              const days = Math.floor(totalSeconds / 86400);
+              const hours = Math.floor((totalSeconds % 86400) / 3600);
+              const minutes = Math.floor((totalSeconds % 3600) / 60);
+              let uptimeStr = "";
+              if (days > 0) uptimeStr += `${days}d `;
+              if (hours > 0 || days > 0) uptimeStr += `${hours}h `;
+              uptimeStr += `${minutes}m`;
+              document.getElementById("uptime").textContent = uptimeStr;
+            } else {
+              document.getElementById("uptime").textContent = "-";
+            }
+
+            document.getElementById("ip_address").textContent = data.ip_address ?? "-";
+            document.getElementById("ws_connected").textContent = data.ws_connected ? "Yes" : "No";
+            // Convert free_heap from bytes to KB
+            if (typeof data.free_heap === "number") {
+              document.getElementById("free_heap").textContent = `${(data.free_heap / 1024).toFixed(1)} KB`;
+            } else {
+              document.getElementById("free_heap").textContent = data.free_heap ?? "-";
+            }
+
+          // Atualizar controles editáveis
+          if (data.sensor_1_state) {
+            document.getElementById("sensor_1_state").value = data.sensor_1_state;
+          }
+          if (data.sensor_2_state) {
+            document.getElementById("sensor_2_state").value = data.sensor_2_state;
+          }
+          if (typeof data.displayBrightness !== "undefined") {
+            const slider = document.getElementById("displayBrightness");
+            slider.value = data.displayBrightness;
+            document.getElementById("brightnessValue").textContent = data.displayBrightness;
+          }
+
+          // Render Matrix
+          const matrixContainer = document.getElementById("matrix");
+          matrixContainer.innerHTML = "";
+          data.displayArray.forEach(row => {
+            row.forEach(colorInt => {
+              const r = (colorInt >> 16) & 0xFF;
+              const g = (colorInt >> 8) & 0xFF;
+              const b = colorInt & 0xFF;
+              const cell = document.createElement("div");
+              cell.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+              cell.className = "w-8 h-8 border border-gray-200";
+              matrixContainer.appendChild(cell);
+            });
+          });
+
+          // Render Logs
+          const logsContainer = document.getElementById("logs");
+          logsContainer.innerHTML = "";
+          if (data.logBuffer) {
+            data.logBuffer.slice().reverse().forEach(msg => {
+              const logLine = document.createElement("div");
+              if (msg.startsWith("INFO:")) logLine.className = "log-info";
+              else if (msg.startsWith("WARNING:")) logLine.className = "log-warning";
+              else if (msg.startsWith("ERROR:")) logLine.className = "log-error";
+              else if (msg.startsWith("DEBUG:")) logLine.className = "log-debug";
+              logLine.textContent = msg;
+              logsContainer.appendChild(logLine);
+            });
+          }
+
+        } catch (err) {
+          console.error("JSON parse error:", err, event.data);
         }
-        for (let c = 0; c < 8; c++, idx++) {
-          const colorInt = row[c];
-          cells[idx].style.background = intToRgb(colorInt);
-        }
-      }
+      };
 
-      // --- Atualiza Logs ---
-      if (Array.isArray(data.logBuffer)) {
-        const logs = [...data.logBuffer].reverse();
-        logList.innerHTML = '';
-        logs.forEach((msg) => {
-          const li = document.createElement('li');
-          li.textContent = msg;
-          li.className = classifyLog(msg);
-          logList.appendChild(li);
-        });
-      }
+      ws.onclose = () => {
+        console.log("⚠️ WebSocket disconnected, retrying in 2s...");
+        clearInterval(statusInterval);
+        setTimeout(connectWebSocket, 2000);
+      };
 
-      const ms = Date.now() - started;
-      statusEl.textContent = `OK — ${new Date().toLocaleTimeString()} (em ${ms} ms)`;
-    } catch (err) {
-      statusEl.textContent = `Erro: ${err.message}`;
-      cells.forEach((cell) => (cell.style.background = '#222'));
+      ws.onerror = (err) => {
+        console.error("❌ WebSocket error:", err);
+        ws.close();
+      };
     }
-  }
 
-  // Atualiza a cada 1s
-  fetchMatrix();
-  setInterval(fetchMatrix, 1000);
-</script>
+    // contador de mensagens por segundo
+    // setInterval(() => {
+    //   console.log(`📩 Mensagens recebidas no último segundo: ${messagesThisSecond}`);
+    //   messagesThisSecond = 0;
+    // }, 1000);
+
+    connectWebSocket();
+
+    // Eventos para modificar valores via REST GET
+    document.getElementById("sensor_1_state").addEventListener("change", (e) => {
+      const val = e.target.value;
+      fetch(`http://charger.local/config/update_state/1/${val}`).then(() =>
+        console.log("Sensor 1 atualizado:", val)
+      );
+    });
+
+    document.getElementById("sensor_2_state").addEventListener("change", (e) => {
+      const val = e.target.value;
+      fetch(`http://charger.local/config/update_state/2/${val}`).then(() =>
+        console.log("Sensor 2 atualizado:", val)
+      );
+    });
+
+    document.getElementById("displayBrightness").addEventListener("input", (e) => {
+      const val = e.target.value;
+      document.getElementById("brightnessValue").textContent = val;
+    });
+
+    document.getElementById("displayBrightness").addEventListener("change", (e) => {
+      const val = e.target.value;
+      fetch(`http://charger.local/config/display_brightness/${val}`).then(() =>
+        console.log("Brilho atualizado:", val)
+      );
+    });
+  </script>
+
 </body>
 </html>

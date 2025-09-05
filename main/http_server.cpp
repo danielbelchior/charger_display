@@ -2,6 +2,7 @@
 #include "logging.h"
 #include "display.h"
 #include <WebSocketsServer.h>
+#include "http_server_index.h"
 
 WebSocketsServer webSocket = WebSocketsServer(81); // WebSocket on port 81
 
@@ -39,7 +40,13 @@ void handleHttpRequests() {
     client.flush(); // Clear the rest of the request from the buffer
 
     // Match the request
-    if (req.indexOf("GET /status") != -1) {
+    if (req.indexOf("GET / ") != -1) {
+        client.println(F("HTTP/1.1 200 OK"));
+        client.println(F("Content-Type: text/html"));
+        client.println(F("Connection: close"));
+        client.println();
+        client.print(index_html);
+    } else if (req.indexOf("GET /status") != -1) {
         // Send HTTP headers
         client.println("HTTP/1.1 200 OK");
         client.println("Content-Type: application/json");
@@ -127,48 +134,35 @@ void handleHttpRequests() {
         }
 
     } else if (req.indexOf("GET /config/update_state/") != -1) {
-    req.replace(" HTTP/1.1", "");
-    String temp = req.substring(req.indexOf("updatestate/") + 12);
-        int firstSlash = temp.indexOf('/');
-        
-        if (firstSlash != -1) {
-            String idStr = temp.substring(0, firstSlash);
-            String stateStr = temp.substring(firstSlash + 1);
-            int spaceIndex = stateStr.indexOf(' ');
-            if (spaceIndex != -1) {
-                stateStr = stateStr.substring(0, spaceIndex);
-            }
+        req.replace(" HTTP/1.1", "");
+        int startIndex = req.indexOf("/update_state/");
 
-            int sensorId = idStr.toInt();
-            logInfo(String("HTTP GET /config/update_state/") + sensorId + "/" + stateStr + " request received.");
+        String params = req.substring(startIndex + String("/update_state/").length());
+        int slashIndex = params.indexOf("/");
 
-            if (sensorId == 1) {
-                sensor_1_state = stateStr;
-                logInfo("Manually updated sensor 1 state to: " + stateStr);
-                client.println("HTTP/1.1 200 OK");
-                client.println("Content-Type: application/json");
-                client.println("Access-Control-Allow-Origin: *");
-                client.println("Connection: close");
-                client.println();
-                client.print("{\"status\":\"ok\", \"sensor_id\":1, \"new_state\":\"" + stateStr + "\"}");
-            } else if (sensorId == 2) {
-                sensor_2_state = stateStr;
-                logInfo("Manually updated sensor 2 state to: " + stateStr);
-                client.println("HTTP/1.1 200 OK");
-                client.println("Content-Type: application/json");
-                client.println("Access-Control-Allow-Origin: *");
-                client.println("Connection: close");
-                client.println();
-                client.print("{\"status\":\"ok\", \"sensor_id\":2, \"new_state\":\"" + stateStr + "\"}");
-            } else {
-                client.println("HTTP/1.1 400 Bad Request");
-                client.println("Content-Type: application/json");
-                client.println("Access-Control-Allow-Origin: *");
-                client.println("Connection: close");
-                client.println();
-                client.print("{\"status\":\"error\", \"message\":\"Invalid sensor_id. Must be 1 or 2.\"}");
-            }
-        } else {
+        int sensorId = params.substring(0, slashIndex).toInt();
+        String sensorState = params.substring(slashIndex + 1);
+        logInfo(String("HTTP GET /config/update_state/") + sensorId + "/" + sensorState + " request received.");
+
+        if (sensorId == 1) {
+            sensor_1_state = sensorState;
+            logInfo("Manually updated sensor 1 state to: " + sensorState);
+            client.println("HTTP/1.1 200 OK");
+            client.println("Content-Type: application/json");
+            client.println("Access-Control-Allow-Origin: *");
+            client.println("Connection: close");
+            client.println();
+            client.print("{\"status\":\"ok\", \"sensor_id\":1, \"new_state\":\"" + sensorState + "\"}");
+        } else if (sensorId == 2) {
+            sensor_2_state = sensorState;
+            logInfo("Manually updated sensor 2 state to: " + sensorState);
+            client.println("HTTP/1.1 200 OK");
+            client.println("Content-Type: application/json");
+            client.println("Access-Control-Allow-Origin: *");
+            client.println("Connection: close");
+            client.println();
+            client.print("{\"status\":\"ok\", \"sensor_id\":2, \"new_state\":\"" + sensorState + "\"}");
+        }  else {
             logWarning("HTTP/1.1 400 Bad Request");
             client.println("HTTP/1.1 400 Bad Request");
             client.println("Content-Type: application/json");
