@@ -9,6 +9,8 @@
 #include "ota.h"
 // Utility
 #include "util.h"
+#include <WiFiUdp.h>
+#include <NTPClient.h>
 
 // --- Global Variable Definitions ---
 // The 'extern' declarations in declarations.h tell other files that these variables exist.
@@ -16,20 +18,21 @@
 
 // NeoPixel
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
-int displayBrightness = 3;
-int displayArray[MATRIX_HEIGHT][MATRIX_WIDTH];
+uint8_t displayBrightness = 3;
+uint8_t displayArray[MATRIX_HEIGHT][MATRIX_WIDTH];
 
 // Home Assistant
 WebsocketsClient client;
 int hass_message_id = 1;
-String sensor_1_state = "unknown";
-String sensor_2_state = "unknown";
+char sensor_1_state[16] = "unknown";
+char sensor_2_state[16] = "unknown";
 bool ws_connected = false;
 
 // WiFi
 WiFiServer server(HTTP_PORT);
 WiFiUDP udp;
 bool wifi_connected = false;
+long wifiLastConnectAttempt = 0;
 
 // State & Timing
 int chargingRow = 1;
@@ -41,8 +44,11 @@ unsigned long lastUpdate = 0;
 const unsigned long interval = 1000; // 1 second
 
 // Logging
-String logBuffer[LOG_BUFFER_SIZE];
+char logBuffer[LOG_BUFFER_SIZE][100] = {0};
 bool ota_in_progress = false;
+
+// NTP
+NTPClient timeClient(udp, "pool.ntp.org", 0, 60000); // UTC, update every 60s
 
 // Onboard LED heartbeat
 int loopIterations = 0;
@@ -85,6 +91,7 @@ void connectToWifi() {
         logError("Failed to connect to WiFi.");
         wifi_connected = false;
     }
+    wifiLastConnectAttempt = millis();
 }
 
 
@@ -111,6 +118,10 @@ void setup() {
     connectToWifi();
     playSound(3, 20, 50);
 
+    // NTP setup
+    timeClient.begin();
+    timeClient.update();
+
 
     if (wifi_connected) {
         render_matrix();
@@ -126,10 +137,10 @@ void setup() {
 }
 
 void getEntitiesState() {
-    sensor_1_state = getEntityState(SENSOR_1_ENTITY_ID);
-    sensor_2_state = getEntityState(SENSOR_2_ENTITY_ID);
-    logInfo("Sensor 1 state: " + sensor_1_state);
-    logInfo("Sensor 2 state: " + sensor_2_state);
+    strcpy(sensor_1_state, getEntityState(SENSOR_1_ENTITY_ID).c_str());
+    strcpy(sensor_2_state, getEntityState(SENSOR_2_ENTITY_ID).c_str());
+    logInfo("Sensor 1 state: " + String(sensor_1_state));
+    logInfo("Sensor 2 state: " + String(sensor_2_state));
 }
 
 void loop() {
@@ -139,6 +150,9 @@ void loop() {
     if (ota_in_progress){
         return;
     }
+
+    // Update current time
+    timeClient.update();
 
     // Toggle onboard LED as a heartbeat
     loopIterations++;
@@ -156,8 +170,8 @@ void loop() {
     if (WiFi.status() != WL_CONNECTED) {
         wifi_connected = false;
         ws_connected = false; // Also reset websocket status
-        sensor_1_state = "unknown";
-        sensor_2_state = "unknown";
+        strcpy(sensor_1_state, "unknown");
+        strcpy(sensor_2_state, "unknown");
         logWarning("WiFi disconnected, trying to reconnect...");
         render_matrix();
         connectToWifi();
@@ -172,8 +186,8 @@ void loop() {
 
     if (wifi_connected) {
         if (!ws_connected) {
-            sensor_1_state = "unknown";
-            sensor_2_state = "unknown";
+            strcpy(sensor_1_state, "unknown");
+            strcpy(sensor_2_state, "unknown");
             logWarning("Websocket disconnected, trying to reconnect...");
             // Attempt to reconnect.
             client.connect(HASS_HOST, HASS_PORT, "/api/websocket");

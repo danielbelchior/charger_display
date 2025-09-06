@@ -9,6 +9,7 @@
 #include <ArduinoWebsockets.h>
 #include <ArduinoJson.h>
 #include <WiFiUdp.h>
+#include <NTPClient.h>
 #include "secrets.h"
 
 // --- Namespaces ---
@@ -24,7 +25,7 @@ using namespace websockets;
 #define HTTP_PORT    80
 
 // --- Logging ---
-#define LOG_BUFFER_SIZE 20
+#define LOG_BUFFER_SIZE 30
 
 // --- Enum for colors ---
 enum Color {
@@ -47,20 +48,21 @@ extern bool ota_in_progress;
 
 // NeoPixel
 extern Adafruit_NeoPixel strip;
-extern int displayBrightness;
-extern int displayArray[MATRIX_HEIGHT][MATRIX_WIDTH];
+extern uint8_t displayBrightness;
+extern uint8_t displayArray[MATRIX_HEIGHT][MATRIX_WIDTH];
 
 // Home Assistant
 extern WebsocketsClient client;
 extern int hass_message_id;
-extern String sensor_1_state;
-extern String sensor_2_state;
+extern char sensor_1_state[16];
+extern char sensor_2_state[16];
 extern bool ws_connected;
 
 // WiFi
 extern WiFiUDP udp;
 extern bool wifi_connected;
 extern WiFiServer server;
+extern long wifiLastConnectAttempt;
 
 // State & Timing
 extern int chargingRow;
@@ -72,7 +74,10 @@ extern unsigned long lastUpdate;
 extern const unsigned long interval;
 
 // Logging
-extern String logBuffer[LOG_BUFFER_SIZE];
+extern char logBuffer[LOG_BUFFER_SIZE][100];
+
+// NTP
+extern NTPClient timeClient;
 
 // --- Function Prototypes for main.ino ---
 // Functions that are in main.ino but called from other files

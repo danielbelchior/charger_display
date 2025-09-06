@@ -105,11 +105,11 @@ void onMessage(WebsocketsMessage message) {
         const char* state = trigger["to_state"]["state"];
 
         if (strcmp(entity_id, SENSOR_1_ENTITY_ID) == 0) {
-            sensor_1_state = state;
+            strcpy(sensor_1_state, state);
             logInfo("Sensor 1 state updated: " + String(sensor_1_state));
             playSound();
         } else if (strcmp(entity_id, SENSOR_2_ENTITY_ID) == 0) {
-            sensor_2_state = state;
+            strcpy(sensor_2_state, state);
             logInfo("Sensor 2 state updated: " + String(sensor_2_state));
             Serial.println(sensor_2_state);
             playSound();

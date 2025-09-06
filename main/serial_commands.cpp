@@ -47,7 +47,7 @@ void handleSerialCommands() {
             // Print in chronological order (oldest to newest)
             // The oldest is at the end of the array.
             for (int i = LOG_BUFFER_SIZE - 1; i >= 0; i--) {
-                if (logBuffer[i] != "") {
+                if (logBuffer[i][0] != '\0') {
                     // Print a counter for readability
                     Serial.print((LOG_BUFFER_SIZE - i));
                     Serial.print(": ");

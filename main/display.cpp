@@ -193,19 +193,19 @@ void render_matrix() {
     } else if (wifi_connected && ws_connected) {
         drawBorder();
 
-        if (sensor_1_state == "charging") {
+        if (strcmp(sensor_1_state, "charging") == 0) {
             state_charging(1, chargingRow);
-        } else if (sensor_1_state == "disconnected") {
+        } else if (strcmp(sensor_1_state, "disconnected") == 0) {
             state_disconnected(1, chargingRow);
-        } else if (sensor_1_state == "unknown") {
+        } else if (strcmp(sensor_1_state, "unknown") == 0) {
             state_unknown(1, chargingRow);
         }
 
-        if (sensor_2_state == "charging") {
+        if (strcmp(sensor_2_state, "charging") == 0) {
             state_charging(2, chargingRow);
-        } else if (sensor_2_state == "disconnected") {
+        } else if (strcmp(sensor_2_state, "disconnected") == 0) {
             state_disconnected(2, chargingRow);
-        } else if (sensor_2_state == "unknown") {
+        } else if (strcmp(sensor_2_state, "unknown") == 0) {
             state_unknown(2, chargingRow);
         }
     } else if (wifi_connected && !ws_connected) {

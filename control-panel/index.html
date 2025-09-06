@@ -24,9 +24,11 @@
     <!-- Status Info -->
     <div class="space-y-2">
       <h2 class="text-lg font-semibold mb-2">Status</h2>
+      <div><strong>Date Time:</strong> <span id="current_time">-</span></div>
       <div><strong>Uptime:</strong> <span id="uptime">-</span></div>
+      <div><strong>Wifi Uptime:</strong> <span id="wifi_last_connect_attempt">-</span></div>
       <div><strong>IP Address:</strong> <span id="ip_address">-</span></div>
-      <div><strong>WS Connected:</strong> <span id="ws_connected">-</span></div>
+      <div><strong>HASS Connected:</strong> <span id="ws_connected">-</span></div>
       <div><strong>Free Heap:</strong> <span id="free_heap">-</span></div>
 
       <!-- Editable Controls -->
@@ -106,6 +108,21 @@
               document.getElementById("uptime").textContent = "-";
             }
 
+            if (typeof data.wifi_last_connect_attempt === "number") {
+              const totalSeconds = data.wifi_last_connect_attempt;
+              const days = Math.floor(totalSeconds / 86400);
+              const hours = Math.floor((totalSeconds % 86400) / 3600);
+              const minutes = Math.floor((totalSeconds % 3600) / 60);
+              let uptimeStr = "";
+              if (days > 0) uptimeStr += `${days}d `;
+              if (hours > 0 || days > 0) uptimeStr += `${hours}h `;
+              uptimeStr += `${minutes}m`;
+              document.getElementById("wifi_last_connect_attempt").textContent = uptimeStr;
+            } else {
+              document.getElementById("wifi_last_connect_attempt").textContent = "-";
+            }
+
+            document.getElementById("current_time").textContent = data.current_time ?? "-";
             document.getElementById("ip_address").textContent = data.ip_address ?? "-";
             document.getElementById("ws_connected").textContent = data.ws_connected ? "Yes" : "No";
             // Convert free_heap from bytes to KB
@@ -149,10 +166,10 @@
           if (data.logBuffer) {
             data.logBuffer.slice().reverse().forEach(msg => {
               const logLine = document.createElement("div");
-              if (msg.startsWith("INFO:")) logLine.className = "log-info";
-              else if (msg.startsWith("WARNING:")) logLine.className = "log-warning";
-              else if (msg.startsWith("ERROR:")) logLine.className = "log-error";
-              else if (msg.startsWith("DEBUG:")) logLine.className = "log-debug";
+              if (msg.includes(" INFO: ")) logLine.className = "log-info";
+              else if (msg.includes(" WARNING: ")) logLine.className = "log-warning";
+              else if (msg.includes(" ERROR: ")) logLine.className = "log-error";
+              else if (msg.includes(" DEBUG: ")) logLine.className = "log-debug";
               logLine.textContent = msg;
               logsContainer.appendChild(logLine);
             });

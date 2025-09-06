@@ -66,10 +66,12 @@ void handleHttpRequests() {
         jsonDoc["displayBrightness"] = displayBrightness;
         jsonDoc["should_render"] = should_render;
         jsonDoc["free_heap"] = ESP.getFreeHeap();
+        jsonDoc["wifi_last_connect_attempt"] = wifiLastConnectAttempt / 1000;
+        jsonDoc["current_time"] = timeClient.getFormattedTime();
 
         JsonArray logData = jsonDoc.createNestedArray("logBuffer");
         for (int i = 0; i < LOG_BUFFER_SIZE; i++) {
-            if (logBuffer[i] != "") {
+            if (logBuffer[i][0] != '\0') {
                 logData.add(logBuffer[i]);
             }
         }
@@ -145,7 +147,7 @@ void handleHttpRequests() {
         logInfo(String("HTTP GET /config/update_state/") + sensorId + "/" + sensorState + " request received.");
 
         if (sensorId == 1) {
-            sensor_1_state = sensorState;
+            strcpy(sensor_1_state, sensorState.c_str());
             logInfo("Manually updated sensor 1 state to: " + sensorState);
             client.println("HTTP/1.1 200 OK");
             client.println("Content-Type: application/json");
@@ -154,7 +156,7 @@ void handleHttpRequests() {
             client.println();
             client.print("{\"status\":\"ok\", \"sensor_id\":1, \"new_state\":\"" + sensorState + "\"}");
         } else if (sensorId == 2) {
-            sensor_2_state = sensorState;
+            strcpy(sensor_2_state, sensorState.c_str());
             logInfo("Manually updated sensor 2 state to: " + sensorState);
             client.println("HTTP/1.1 200 OK");
             client.println("Content-Type: application/json");
@@ -199,10 +201,12 @@ void handleWebSocketStatus(uint8_t num) {
     jsonDoc["displayBrightness"] = displayBrightness;
     jsonDoc["should_render"] = should_render;
     jsonDoc["free_heap"] = ESP.getFreeHeap();
+    jsonDoc["wifi_last_connect_attempt"] = wifiLastConnectAttempt / 1000;
+    jsonDoc["current_time"] = timeClient.getFormattedTime();
 
     JsonArray logData = jsonDoc.createNestedArray("logBuffer");
     for (int i = 0; i < LOG_BUFFER_SIZE; i++) {
-        if (logBuffer[i] != "") {
+        if (logBuffer[i][0] != '\0') {
             logData.add(logBuffer[i]);
         }
     }

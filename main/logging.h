@@ -7,6 +7,6 @@ void logInfo(String message);
 void logWarning(String message);
 void logError(String message);
 void logDebug(String message);
-void _logMessage(String message);
+void _logMessage(String level, String message);
 
 #endif // LOGGING_H
