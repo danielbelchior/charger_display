@@ -66,6 +66,11 @@
     <div id="logs" class="font-mono text-xs space-y-1 max-h-80 overflow-y-auto"></div>
   </div>
 
+  <!-- Restart Button -->
+  <button id="restartBtn" title="Restart" class="fixed top-4 right-4 z-50 bg-white border border-gray-300 shadow-lg rounded-full p-3 hover:bg-red-100 transition" style="font-size: 2rem;">
+    🔄
+  </button>
+
   <script>
     let ws;
     let statusInterval;
@@ -225,6 +230,19 @@
       fetch(`http://charger.local/config/display_brightness/${val}`).then(() =>
         console.log("Brilho atualizado:", val)
       );
+    });
+
+    document.getElementById("restartBtn").addEventListener("click", function() {
+      if (confirm("Are you sure you want to restart the system?")) {
+        fetch("http://charger.local/boot", { method: "POST" })
+          .then(res => res.json())
+          .then(data => {
+            alert("Restart command sent! System will reboot.");
+          })
+          .catch(err => {
+            alert("Failed to send restart command: " + err);
+          });
+      }
     });
   </script>
 

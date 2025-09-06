@@ -56,7 +56,6 @@ void handleHttpRequests() {
 
         // Create JSON response
         DynamicJsonDocument jsonDoc(4096);
-
         jsonDoc["uptime"] = millis() / 1000;
         jsonDoc["ip_address"] = WiFi.localIP().toString();
         jsonDoc["wifi_connected"] = wifi_connected;
@@ -173,7 +172,16 @@ void handleHttpRequests() {
             client.println();
             client.print("{\"status\":\"error\", \"message\":\"Malformed URL. Use /config/updatestate/<id>/<value>\"}");
         }
-
+    } else if (req.indexOf("POST /boot") != -1 || req.indexOf("GET /boot") != -1) {
+            logInfo("HTTP /boot request received. Rebooting system.");
+            client.println("HTTP/1.1 200 OK");
+            client.println("Content-Type: application/json");
+            client.println("Access-Control-Allow-Origin: *");
+            client.println("Connection: close");
+            client.println();
+            client.print("{\"status\":\"ok\", \"action\":\"boot\"}");
+            delay(100);
+            ESP.restart();
     } else {
         logWarning("HTTP/1.1 404 Not Found");
         // Send 404 Not Found

@@ -2,7 +2,6 @@
 #include "logging.h"
 #include "display.h"
 #include "hass.h"
-#include "serial_commands.h"
 #include "http_server.h"
 #include <ESPmDNS.h>
 // OTA
@@ -162,7 +161,6 @@ void loop() {
         digitalWrite(LED_BUILTIN, ledState);
     }
 
-    handleSerialCommands();
     handleHttpRequests();
     handleWebSocket();
 

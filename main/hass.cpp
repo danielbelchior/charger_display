@@ -28,21 +28,18 @@ String getEntityState(String entityId){
 
     if (httpResponseCode > 0) {
       String payload = http.getString();
-      Serial.println("Response:");
-      Serial.println(payload);
+      logInfo("Response: " + payload);
 
       // Parse JSON to get the state value
       // Using DynamicJsonDocument to avoid potential overflow with larger HA responses.
       DynamicJsonDocument doc(1024);
       deserializeJson(doc, payload);
       const char* state = doc["state"];
-      Serial.print("Sensor state: ");
-      Serial.println(state);
+      logInfo("Sensor state: " + String(state));
       http.end();
       return state;
     } else {
-      Serial.print("Error on HTTP request: ");
-      Serial.println(httpResponseCode);
+      logError("Error on HTTP request: " + String(httpResponseCode));
       http.end();
       return "error";
     }
