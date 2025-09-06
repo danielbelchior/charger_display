@@ -188,9 +188,11 @@ void render_matrix() {
     // Clean the display array
     createArray8x8();
 
-    if (ota_in_progress) {
-        otaInProgress();
-    } else if (wifi_connected && ws_connected) {
+    // OTA DISABLED
+    // if (ota_in_progress) {
+    //     otaInProgress();
+    // } else 
+    if (wifi_connected && ws_connected) {
         drawBorder();
 
         if (strcmp(sensor_1_state, "charging") == 0) {

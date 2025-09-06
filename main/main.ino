@@ -5,7 +5,7 @@
 #include "http_server.h"
 #include <ESPmDNS.h>
 // OTA
-#include "ota.h"
+// #include "ota.h"
 // Utility
 #include "util.h"
 #include <WiFiUdp.h>
@@ -17,7 +17,7 @@
 
 // NeoPixel
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
-uint8_t displayBrightness = 3;
+uint8_t displayBrightness = 20;
 uint8_t displayArray[MATRIX_HEIGHT][MATRIX_WIDTH];
 
 // Home Assistant
@@ -44,14 +44,15 @@ const unsigned long interval = 1000; // 1 second
 
 // Logging
 char logBuffer[LOG_BUFFER_SIZE][100] = {0};
-bool ota_in_progress = false;
+//bool ota_in_progress = false;
 
 // NTP
 NTPClient timeClient(udp, "pool.ntp.org", 0, 60000); // UTC, update every 60s
 
 // Onboard LED heartbeat
-int loopIterations = 0;
-int ledState = LOW;
+// DISABLED
+// int loopIterations = 0;
+// int ledState = LOW;
 
 
 // --- WiFi and Utility Functions ---
@@ -82,8 +83,9 @@ void connectToWifi() {
             logInfo("mDNS responder started: charger.local");
         }
 
-        logInfo("OTA initialization");
-        setupOTA("charger");
+        // OTA DISABLED
+        // logInfo("OTA initialization");
+        // setupOTA("charger");
 
         wifi_connected = true;
     } else {
@@ -109,7 +111,7 @@ void setup() {
     playSound(2, 20, 50);
 
     // Initialize onboard LED
-    pinMode(LED_BUILTIN, OUTPUT);
+    // pinMode(LED_BUILTIN, OUTPUT);
 
     setupDisplay();
     render_matrix(); // Initial render
@@ -133,6 +135,7 @@ void setup() {
 
         setupHttpServer();
     }
+    playSound(1, 50, 400);
 }
 
 void getEntitiesState() {
@@ -143,23 +146,24 @@ void getEntitiesState() {
 }
 
 void loop() {
-    
+
+    // OTA DISABLED
     // Handle OTA updates
-    handleOTA();
-    if (ota_in_progress){
-        return;
-    }
+    // handleOTA();
+    // if (ota_in_progress){
+    //     return;
+    // }
 
     // Update current time
     timeClient.update();
 
     // Toggle onboard LED as a heartbeat
-    loopIterations++;
-    if (loopIterations > 1500){
-        loopIterations=0;
-        ledState = !ledState;
-        digitalWrite(LED_BUILTIN, ledState);
-    }
+    // loopIterations++;
+    // if (loopIterations > 1500){
+    //     loopIterations=0;
+    //     ledState = !ledState;
+    //     digitalWrite(LED_BUILTIN, ledState);
+    // }
 
     handleHttpRequests();
     handleWebSocket();

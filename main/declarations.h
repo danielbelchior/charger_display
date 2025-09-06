@@ -20,7 +20,7 @@ using namespace websockets;
 #define MATRIX_WIDTH 8
 #define MATRIX_HEIGHT 8
 #define BUZZER_PIN    13
-#define LED_BUILTIN   2
+// #define LED_BUILTIN   2
 #define LED_COUNT    (MATRIX_WIDTH * MATRIX_HEIGHT)
 #define HTTP_PORT    80
 
@@ -44,6 +44,7 @@ enum Color {
 // This allows them to be shared across files.
 
 // OTA update
+// OTA DISABLED
 extern bool ota_in_progress;
 
 // NeoPixel
