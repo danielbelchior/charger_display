@@ -1,107 +1,87 @@
-# E-Bike Charger Status Display
+# Charger Display
 
-This project uses an ESP32 and an 8x8 NeoPixel LED matrix to display the charging status of two e-bikes. It connects to a Home Assistant instance via WebSockets to get real-time status from two specified sensor entities.
+This project is a custom-built, WiFi-enabled status display for monitoring two e-bike chargers integrated with Home Assistant. It uses an ESP32 and an 8x8 RGB LED matrix to provide real-time visual feedback.
+
+
+## Hardware
+
+*   **Microcontroller:** ESP32-WROOM-32
+*   **Display:** 8x8 WS2812B (NeoPixel) RGB LED matrix
+*   **Audio:** Active buzzer module for notifications
 
 ## Features
 
--   **Dual Display**: The 8x8 matrix is split vertically to show the status of two separate chargers.
--   **Clear Visual States**:
-    -   **Charging**: An animated blue bar rises to indicate charging.
-    -   **Disconnected/Off**: A scrolling yellow pattern.
-    -   **Unknown**: A static red indicator.
-    -   **No WiFi**: A large red 'X' across the display.
--   **Live Indicator**: A single brighter pixel continuously rotates around the border to show the system is active and running.
--   **Home Assistant Integration**: Connects directly to your Home Assistant's WebSocket API for real-time, local updates.
+*   **Real-time Status Display:** Connects to Home Assistant via WebSocket to get instant updates for two charger sensors.
+*   **Visual States:** The 8x8 matrix displays different patterns and colors for various states:
+    *   Charging
+    *   Disconnected
+    *   State Unknown
+    *   No WiFi Connection
+    *   No Home Assistant Connection
+*   **Web Interface:** A built-in web UI allows for easy monitoring and control from any device on the network.
+![WebUI](webui-demo.png)
 
-## Hardware Requirements
+*   **REST API:** Provides endpoints for status checks, configuration, and system control.
+*   **mDNS Service:** Easily access the device using the friendly URL `http://charger.local`.
+*   **NTP Time Sync:** Logs are accurately timestamped using time from an NTP server.
+*   **Audible Alerts:** An active buzzer provides sounds for state changes and system events.
+*   **Over-the-Air (OTA) Updates:** Supports firmware updates over the WiFi network (currently disabled in the main code).
 
--   An ESP32 development board (e.g., ESP32-WROOM-32).
--   An 8x8 WS2812B (NeoPixel) RGB LED matrix.
--   A 5V power supply capable of providing at least 2A (recommended for the matrix).
--   Jumper wires.
+## Installation
 
-### Wiring
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/user/charger_display.git
+    cd charger_display
+    ```
 
-Connect the components as follows. **Important**: Ensure a common ground between the ESP32 and the matrix power supply.
+2.  **Configure Secrets:**
+    Rename `secrets_template.h` to `secrets.h` and fill in your details:
+    *   WiFi SSID and password.
+    *   Home Assistant host, port, and long-lived access token.
+    *   The `entity_id`s for your two charger sensors in Home Assistant.
 
-| ESP32 Pin | LED Matrix Pin |
-| :-------- | :------------- |
-| `GPIO 23` | `DIN` (Data In) |
-| `GND`     | `GND`          |
-| `5V` / `VIN` | `5V`           |
+3.  **Install Dependencies:**
+    This project requires the following Arduino libraries. You can install them using the Arduino IDE's Library Manager:
+    *   `Adafruit NeoPixel`
+    *   `ArduinoWebsockets`
+    *   `ArduinoJson`
+    *   `NTPClient`
 
-*Note: The `LED_PIN` is defined as `23` in `main.ino`. You can change this to any other suitable GPIO pin on your ESP32.*
+4.  **Compile and Upload:**
+    *   Open the `main/main.ino` file in the Arduino IDE or your preferred editor (like VS Code with PlatformIO).
+    *   Select your ESP32 board from the board manager.
+    *   Select the correct COM port.
+    *   Click "Upload" to flash the firmware to the device.
 
-It is highly recommended to power the LED matrix from an external 5V power supply, not directly from the ESP32's 5V pin, as the matrix can draw significant current.
+## Web Interface
 
-## Software & Setup
+The device hosts a comprehensive web interface accessible at **`http://charger.local`**.
 
-### 1. Arduino IDE Setup
+The UI provides:
+*   A live view of the 8x8 LED matrix display.
+*   System status including uptime, IP address, and connection status.
+*   Live logs from the device.
+*   Controls to manually set sensor states and adjust display brightness.
 
-1.  **Install Arduino IDE**: Download and install the latest version from the official Arduino website.
+![WebUI](webui-demo.png)
 
-2.  **Add ESP32 Board Support**:
-    -   Open Arduino IDE and go to `File` > `Preferences` (or `Arduino IDE` > `Settings...` on macOS).
-    -   In the "Additional Board Manager URLs" field, add the following URL:
-        ```
-        https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
-        ```
-    -   Click "OK".
-    -   Go to `Tools` > `Board` > `Boards Manager...`.
-    -   Search for "esp32" and install the package by **Espressif Systems**.
+## REST API
 
-3.  **Select Your Board**:
-    -   Go to `Tools` > `Board` and select your specific ESP32 board model (e.g., "ESP32 Dev Module").
+The device offers a simple REST API for integration and control.
 
-### 2. Install Required Libraries
+*   **`GET /status`**
+    Returns a JSON object with detailed system status, including uptime, sensor states, logs, and a representation of the current display matrix.
 
-You can install these libraries via the Arduino Library Manager. Go to `Sketch` > `Include Library` > `Manage Libraries...`.
+*   **`GET /boot` or `POST /boot`**
+    Reboots the ESP32 module.
 
-Search for and install the following:
+*   **`GET /config/display_brightness/${val}`**
+    Sets the display brightness. `${val}` should be an integer between 0 and 255.
+    *Example:* `http://charger.local/config/display_brightness/50`
 
--   `Adafruit NeoPixel` by Adafruit
--   `ArduinoWebsockets` by Markus Sattler
--   `ArduinoJson` by Benoit Blanchon
-
-### 3. Configure Project Secrets
-
-The project requires credentials for your WiFi network and Home Assistant instance.
-
-1.  Find the `secrets_template.h` file in the project directory.
-2.  Create a copy of this file and rename it to `secrets.h`.
-3.  Open `secrets.h` and fill in the required values:
-
-```cpp
-// secrets.h
-#pragma once
-
-// CONFIG WIFI
-#define WIFI_SSID "YourWifiSSID"
-#define WIFI_PASSWORD "YourWifiPassword"
-
-// CONFIG HOME ASSISTANT
-#define HASS_HOST "homeassistant.local" // Or your HA IP address
-#define HASS_PORT 8123
-#define HASS_TOKEN "Your_Long_Lived_Access_Token"
-
-// SENSORS
-#define SENSOR_1_ENTITY_ID "sensor.ebike_1_status"
-#define SENSOR_2_ENTITY_ID "sensor.ebike_2_status"
-```
-
-**How to get a Home Assistant Token:**
-1.  In your Home Assistant UI, click on your user profile in the bottom-left corner.
-2.  Scroll down to the "Long-Lived Access Tokens" section.
-3.  Click "Create Token", give it a name (e.g., "ESP32 Charger Display"), and copy the generated token. **You will only see this token once.**
-
-**Sensor States:**
-The code expects the sensor entities to have states like `charging`, `disconnected`, or `off`. If your smart plugs or sensors provide different states (e.g., numeric power values), you may need to create a Template Sensor in Home Assistant to translate those values into the expected string states.
-
-## Compilation and Upload
-
-1.  Connect your ESP32 to your computer via a USB cable.
-2.  In the Arduino IDE, go to `Tools` > `Port` and select the correct serial port for your ESP32.
-3.  Click the "Upload" button (the arrow icon) to compile the sketch and upload it to the board.
-4.  If the upload fails, some ESP32 boards require you to hold down the `BOOT` button on the board when the IDE starts the upload process.
-
-Once uploaded, the ESP32 will attempt to connect to your WiFi. You can open the Serial Monitor (`Tools` > `Serial Monitor`, set to `115200` baud) to see debug messages and connection status.
+*   **`GET /config/update_state/${bike_id}/${val}`**
+    Manually overrides the state of a charger sensor.
+    *   `${bike_id}`: `1` or `2`
+    *   `${val}`: A string like `charging`, `disconnected`, or `unknown`.
+    *Example:* `http://charger.local/config/update_state/1/charging`
