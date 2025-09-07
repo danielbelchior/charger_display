@@ -155,7 +155,7 @@ void loop() {
     // }
 
     // Update current time
-    timeClient.update();
+    // timeClient.update();
 
     // Toggle onboard LED as a heartbeat
     // loopIterations++;
