@@ -1,0 +1,53 @@
+name: Arduino CI
+
+on:
+  push:
+    paths:
+      - "main/**"
+      - ".github/workflows/**"
+  pull_request:
+    paths:
+      - "main/**"
+      - ".github/workflows/**"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Prepare secrets.h
+        run: cp ./secrets_template.h main/secrets.h
+
+      - name: Install Arduino CLI
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
+          sudo mv bin/arduino-cli /usr/local/bin/
+          arduino-cli version
+
+      - name: Install ESP32 platform
+        run: |
+          arduino-cli config init --overwrite
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+
+      - name: Install libraries (if needed)
+        run: |
+          arduino-cli lib install "ArduinoJson"
+          arduino-cli lib install "Adafruit NeoPixel"
+          arduino-cli lib install "NTPClient"
+          arduino-cli lib install "ArduinoSTL"
+          arduino-cli lib install "WebSockets"
+          arduino-cli lib install "ArduinoWebsockets"
+          git clone https://github.com/dawidchyrzynski/arduino-home-assistant.git /home/runner/Arduino/libraries/arduino-home-assistant
+
+
+          # add more libraries here if your sketch needs them
+
+      - name: Compile sketch for ESP32 Dev Module
+        run: |
+          arduino-cli compile \
+            --fqbn esp32:esp32:esp32 \
+            main/main.ino

@@ -1,0 +1,62 @@
+#!/bin/bash
+echo "pre-commit hook started"
+set -e
+
+HTML_FILE="control-panel/index.html"
+HEADER_FILE="main/http_server_index.h"
+
+# Only run if index.html is staged
+echo "Checking if $HTML_FILE is staged"
+if ! git diff --cached --name-only | grep -q "^$HTML_FILE$"; then
+  echo "$HTML_FILE is not staged, exiting"
+  exit 0
+fi
+echo "$HTML_FILE is staged"
+
+# Ensure tools are installed
+echo "Checking for html-minifier"
+command -v html-minifier >/dev/null 2>&1 || {
+  echo "html-minifier not found. Install with: npm install -g html-minifier";
+  exit 1;
+}
+echo "html-minifier found"
+
+# Minify HTML (with CSS inlined)
+echo "Minifying $HTML_FILE"
+MINIFIED_HTML=$(html-minifier \
+  --collapse-whitespace \
+  --remove-comments \
+  --minify-css true \
+  --minify-js true \
+  "$HTML_FILE")
+echo "Minification complete"
+
+# Escape for C++ string literal
+echo "Escaping HTML"
+ESCAPED=$(echo "$MINIFIED_HTML" | sed 's/\\/\\\\/g; s/"/\\"/g; s/$/\\n/' | tr -d '\r')
+echo "Escaping complete"
+
+# Write header file to a temp file
+echo "Writing to temporary file"
+echo "$TMP_FILE"
+TMP_FILE=$(mktemp)
+echo "const char index_html[] PROGMEM = R\"rawliteral(" > "$TMP_FILE"
+echo "$MINIFIED_HTML" >> "$TMP_FILE"
+echo ")rawliteral\";" >> "$TMP_FILE"
+echo "Finished writing to temporary file"
+
+# Replace only if changed
+echo "Comparing temporary file with $HEADER_FILE"
+if [ ! -f "$HEADER_FILE" ] || ! cmp -s "$TMP_FILE" "$HEADER_FILE"; then
+  echo "Files are different, updating $HEADER_FILE"
+  mv "$TMP_FILE" "$HEADER_FILE"
+  git add "$HEADER_FILE"
+  echo "✅ Updated $HEADER_FILE"
+else
+  echo "Files are the same, no changes needed"
+  rm "$TMP_FILE"
+  echo "ℹ️  No changes in $HEADER_FILE"
+fi
+
+echo "pre-commit hook finished"
+
