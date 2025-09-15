@@ -5,6 +5,9 @@
 #define WIFI_SSID "SSID"
 #define WIFI_PASSWORD "PASSWORD"
 
+// CONFIG NTP
+#define NTP_SERVER "pool.ntp.org"
+
 // CONFIG HOME ASSISTANT
 #define HASS_HOST "homeassistant.local"
 #define HASS_PORT 8123
@@ -17,3 +20,4 @@
 // Log UDP endpoint (for compatibility with logging.cpp)
 #define LOG_UDP_IP "logger.local"
 #define LOG_UDP_PORT 12201
+

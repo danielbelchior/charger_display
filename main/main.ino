@@ -47,12 +47,7 @@ char logBuffer[LOG_BUFFER_SIZE][100] = {0};
 //bool ota_in_progress = false;
 
 // NTP
-NTPClient timeClient(udp, "pool.ntp.org", 0, 60000); // UTC, update every 60s
-
-// Onboard LED heartbeat
-// DISABLED
-// int loopIterations = 0;
-// int ledState = LOW;
+NTPClient timeClient(udp, NTP_SERVER, 0, 3600000); // UTC, update every 1h
 
 
 // --- WiFi and Utility Functions ---
@@ -110,8 +105,6 @@ void setup() {
     // Play buzzer sound
     playSound(2, 20, 50);
 
-    // Initialize onboard LED
-    // pinMode(LED_BUILTIN, OUTPUT);
 
     setupDisplay();
     render_matrix(); // Initial render
@@ -154,16 +147,6 @@ void loop() {
     //     return;
     // }
 
-    // Update current time
-    // timeClient.update();
-
-    // Toggle onboard LED as a heartbeat
-    // loopIterations++;
-    // if (loopIterations > 1500){
-    //     loopIterations=0;
-    //     ledState = !ledState;
-    //     digitalWrite(LED_BUILTIN, ledState);
-    // }
 
     handleHttpRequests();
     handleWebSocket();
