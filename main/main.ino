@@ -67,6 +67,7 @@ void connectToWifi() {
         retries++;
     }
     if (WiFi.status() == WL_CONNECTED) {
+        wifiLastConnectAttempt = millis();
         logInfo("WiFi connected!");
         String ipStr = WiFi.localIP().toString();
         logInfo("IP address: " + ipStr);
@@ -87,7 +88,6 @@ void connectToWifi() {
         logError("Failed to connect to WiFi.");
         wifi_connected = false;
     }
-    wifiLastConnectAttempt = millis();
 }
 
 
