@@ -19,7 +19,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Prepare secrets.h
-        run: cp ./secrets_template.h main/secrets.h
+        run: cp main/secrets_template.h main/secrets.h
 
       - name: Install Arduino CLI
         run: |
