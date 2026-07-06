@@ -16,6 +16,7 @@
 // SENSORS
 #define SENSOR_1_ENTITY_ID "sensor.sensor_1"
 #define SENSOR_2_ENTITY_ID "sensor.sensor_2"
+#define SENSOR_3_ENTITY_ID "sensor.sensor_3"
 
 // Log UDP endpoint (for compatibility with logging.cpp)
 #define LOG_UDP_IP "logger.local"

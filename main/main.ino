@@ -25,6 +25,7 @@ WebsocketsClient client;
 int hass_message_id = 1;
 char sensor_1_state[16] = "unknown";
 char sensor_2_state[16] = "unknown";
+char sensor_3_state[16] = "unknown";
 bool ws_connected = false;
 
 // WiFi
@@ -134,8 +135,10 @@ void setup() {
 void getEntitiesState() {
     strcpy(sensor_1_state, getEntityState(SENSOR_1_ENTITY_ID).c_str());
     strcpy(sensor_2_state, getEntityState(SENSOR_2_ENTITY_ID).c_str());
+    strcpy(sensor_3_state, getEntityState(SENSOR_3_ENTITY_ID).c_str());
     logInfo("Sensor 1 state: " + String(sensor_1_state));
     logInfo("Sensor 2 state: " + String(sensor_2_state));
+    logInfo("Sensor 3 state: " + String(sensor_3_state));
 }
 
 void loop() {

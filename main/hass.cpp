@@ -92,6 +92,18 @@ void onMessage(WebsocketsMessage message) {
         client.send(sub_str_2);
         logInfo("Subscribing to " + String(SENSOR_2_ENTITY_ID));
 
+        // Subscribe to sensor compressor
+        JsonDocument sub_msg_3;
+        sub_msg_3["id"] = hass_message_id++;
+        sub_msg_3["type"] = "subscribe_trigger";
+        JsonObject trigger3 = sub_msg_3.createNestedObject("trigger");
+        trigger3["platform"] = "state";
+        trigger3["entity_id"] = SENSOR_3_ENTITY_ID;
+        String sub_str_3;
+        serializeJson(sub_msg_3, sub_str_3);
+        client.send(sub_str_3);
+        logInfo("Subscribing to " + String(SENSOR_3_ENTITY_ID));
+
     } else if (strcmp(type, "auth_invalid") == 0) {
         logError("Auth invalid. Check your HASS_TOKEN.");
     } else if (strcmp(type, "event") == 0) {
@@ -110,6 +122,19 @@ void onMessage(WebsocketsMessage message) {
             logInfo("Sensor 2 state updated: " + String(sensor_2_state));
             Serial.println(sensor_2_state);
             playSound();
+        } else if (strcmp(entity_id, SENSOR_3_ENTITY_ID) == 0) {
+            strcpy(sensor_3_state, state);
+            logInfo("Sensor 3 state updated: " + String(sensor_3_state));
+            Serial.println(sensor_3_state);
+
+            String stateLower = String(sensor_3_state);
+            stateLower.toLowerCase();
+
+            if (stateLower == "on") {
+                playSound(3, 50, 100);
+            } else {
+                playSound(1, 50, 300);
+            }
         }
     } else if (strcmp(type, "result") == 0) {
         if (doc["success"] == true) {

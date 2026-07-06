@@ -57,6 +57,7 @@ extern WebsocketsClient client;
 extern int hass_message_id;
 extern char sensor_1_state[16];
 extern char sensor_2_state[16];
+extern char sensor_3_state[16];
 extern bool ws_connected;
 
 // WiFi
