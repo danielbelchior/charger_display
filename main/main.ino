@@ -32,7 +32,7 @@ bool ws_connected = false;
 WiFiServer server(HTTP_PORT);
 WiFiUDP udp;
 bool wifi_connected = false;
-long wifiLastConnectAttempt = 0;
+unsigned long wifiLastConnectAttempt = 0;
 
 // State & Timing
 int chargingRow = 1;
@@ -42,6 +42,15 @@ int highlightY = 0;
 bool should_render = true;
 unsigned long lastUpdate = 0;
 const unsigned long interval = 1000; // 1 second
+
+// Connection retry timing
+const unsigned long WIFI_RETRY_INITIAL_DELAY = 5000;
+const unsigned long WIFI_RETRY_MAX_DELAY = 60000;
+const unsigned long HASS_RETRY_DELAY = 10000;
+unsigned long nextWifiRetryAt = 0;
+unsigned long wifiRetryDelay = WIFI_RETRY_INITIAL_DELAY;
+unsigned long nextHassRetryAt = 0;
+bool httpServerStarted = false;
 
 // Logging
 char logBuffer[LOG_BUFFER_SIZE][100] = {0};
@@ -56,38 +65,62 @@ NTPClient timeClient(udp, NTP_SERVER, 0, 3600000); // UTC, update every 1h
 void connectToWifi() {
     logInfo("Connecting to WiFi...");
     logInfo("SSID: " + String(WIFI_SSID));
-    logInfo("PASSWORD: " + String(WIFI_PASSWORD));
 
     WiFi.setHostname("charger");
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-    int retries = 0;
-    while (WiFi.status() != WL_CONNECTED && retries < 90) {
-        delay(500);
-        yield();
-        Serial.print(".");
-        retries++;
-    }
-    if (WiFi.status() == WL_CONNECTED) {
-        wifiLastConnectAttempt = millis();
-        logInfo("WiFi connected!");
-        String ipStr = WiFi.localIP().toString();
-        logInfo("IP address: " + ipStr);
-        
-        logInfo("mDNS.begin charger.local");
-        if (!MDNS.begin("charger")) {
-            logError("Error starting mDNS");
-        } else {
-            logInfo("mDNS responder started: charger.local");
-        }
+    nextWifiRetryAt = millis() + wifiRetryDelay;
+    wifiRetryDelay = min(wifiRetryDelay * 2, WIFI_RETRY_MAX_DELAY);
+}
 
-        // OTA DISABLED
-        // logInfo("OTA initialization");
-        // setupOTA("charger");
+void handleWifiConnected() {
+    wifi_connected = true;
+    wifiLastConnectAttempt = millis();
+    wifiRetryDelay = WIFI_RETRY_INITIAL_DELAY;
+    logInfo("WiFi connected!");
+    logInfo("IP address: " + WiFi.localIP().toString());
 
-        wifi_connected = true;
+    if (!MDNS.begin("charger")) {
+        logError("Error starting mDNS");
     } else {
-        logError("Failed to connect to WiFi.");
+        logInfo("mDNS responder started: charger.local");
+    }
+
+    logInfo("Loading initial state of sensors");
+    getEntitiesState();
+
+    logInfo("Websocket connecting");
+    setupHass();
+    nextHassRetryAt = millis() + HASS_RETRY_DELAY;
+
+    if (!httpServerStarted) {
+        setupHttpServer();
+        httpServerStarted = true;
+    }
+
+    render_matrix();
+}
+
+void handleWifiConnection() {
+    if (WiFi.status() == WL_CONNECTED) {
+        if (!wifi_connected) {
+            handleWifiConnected();
+        }
+        return;
+    }
+
+    if (wifi_connected) {
         wifi_connected = false;
+        ws_connected = false;
+        strcpy(sensor_1_state, "unknown");
+        strcpy(sensor_2_state, "unknown");
+        strcpy(sensor_3_state, "unknown");
+        logWarning("WiFi disconnected.");
+        render_matrix();
+    }
+
+    if ((long)(millis() - nextWifiRetryAt) >= 0) {
+        logWarning("WiFi reconnect attempt.");
+        connectToWifi();
     }
 }
 
@@ -116,19 +149,6 @@ void setup() {
     // NTP setup
     timeClient.begin();
     timeClient.update();
-
-
-    if (wifi_connected) {
-        render_matrix();
-        logInfo("Loading initial state of sensors");
-        getEntitiesState();
-
-        logInfo("Websocket connecting");
-        setupHass();
-        logInfo("Websocket connected");
-
-        setupHttpServer();
-    }
     playSound(1, 50, 400);
 }
 
@@ -155,31 +175,15 @@ void loop() {
     handleWebSocket();
 
     // --- Connection Management ---
-    if (WiFi.status() != WL_CONNECTED) {
-        wifi_connected = false;
-        ws_connected = false; // Also reset websocket status
-        strcpy(sensor_1_state, "unknown");
-        strcpy(sensor_2_state, "unknown");
-        logWarning("WiFi disconnected, trying to reconnect...");
-        render_matrix();
-        connectToWifi();
-        if (wifi_connected) {
-            logInfo("Wifi reconnected!");
-            render_matrix();
-            getEntitiesState();
-            // Re-init the HASS connection
-            setupHass();
-        }
-    }
+    handleWifiConnection();
 
     if (wifi_connected) {
         if (!ws_connected) {
-            strcpy(sensor_1_state, "unknown");
-            strcpy(sensor_2_state, "unknown");
-            logWarning("Websocket disconnected, trying to reconnect...");
-            // Attempt to reconnect.
-            client.connect(HASS_HOST, HASS_PORT, "/api/websocket");
-            getEntitiesState();
+            if ((long)(millis() - nextHassRetryAt) >= 0) {
+                logWarning("Websocket disconnected, trying to reconnect...");
+                setupHass();
+                nextHassRetryAt = millis() + HASS_RETRY_DELAY;
+            }
         }
         loopHass(); // Process WebSocket messages
     }

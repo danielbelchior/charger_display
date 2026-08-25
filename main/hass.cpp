@@ -3,9 +3,13 @@
 
 // This will be called from the main setup()
 void setupHass() {
-    // Register callbacks and connect
-    client.onMessage(onMessage);
-    client.onEvent(onEvent);
+    static bool callbacksRegistered = false;
+    if (!callbacksRegistered) {
+        client.onMessage(onMessage);
+        client.onEvent(onEvent);
+        callbacksRegistered = true;
+    }
+
     client.connect(HASS_HOST, HASS_PORT, "/api/websocket");
 }
 

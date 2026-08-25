@@ -64,7 +64,7 @@ extern bool ws_connected;
 extern WiFiUDP udp;
 extern bool wifi_connected;
 extern WiFiServer server;
-extern long wifiLastConnectAttempt;
+extern unsigned long wifiLastConnectAttempt;
 
 // State & Timing
 extern int chargingRow;
