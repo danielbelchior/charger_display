@@ -37,8 +37,13 @@ String getEntityState(String entityId){
       // Parse JSON to get the state value
       // Using DynamicJsonDocument to avoid potential overflow with larger HA responses.
       DynamicJsonDocument doc(1024);
-      deserializeJson(doc, payload);
-      const char* state = doc["state"];
+      DeserializationError error = deserializeJson(doc, payload);
+      if (error) {
+        logError("Failed to parse Home Assistant response: " + String(error.c_str()));
+        http.end();
+        return "error";
+      }
+      const char* state = doc["state"] | "error";
       logInfo("Sensor state: " + String(state));
       http.end();
       return state;
@@ -59,7 +64,7 @@ void onMessage(WebsocketsMessage message) {
         return;
     }
 
-    const char* type = doc["type"];
+    const char* type = doc["type"] | "";
 
     if (strcmp(type, "auth_required") == 0) {
         logInfo("Auth required, sending token...");
@@ -107,6 +112,7 @@ void onMessage(WebsocketsMessage message) {
         serializeJson(sub_msg_3, sub_str_3);
         client.send(sub_str_3);
         logInfo("Subscribing to " + String(SENSOR_3_ENTITY_ID));
+        refreshHassStates = true;
 
     } else if (strcmp(type, "auth_invalid") == 0) {
         logError("Auth invalid. Check your HASS_TOKEN.");
@@ -114,20 +120,20 @@ void onMessage(WebsocketsMessage message) {
         JsonObject event = doc["event"];
         JsonObject variables = event["variables"];
         JsonObject trigger = variables["trigger"];
-        const char* entity_id = trigger["entity_id"];
-        const char* state = trigger["to_state"]["state"];
+        const char* entity_id = trigger["entity_id"] | "";
+        const char* state = trigger["to_state"]["state"] | "unknown";
 
         if (strcmp(entity_id, SENSOR_1_ENTITY_ID) == 0) {
-            strcpy(sensor_1_state, state);
+            copySensorState(sensor_1_state, state);
             logInfo("Sensor 1 state updated: " + String(sensor_1_state));
             playSound();
         } else if (strcmp(entity_id, SENSOR_2_ENTITY_ID) == 0) {
-            strcpy(sensor_2_state, state);
+            copySensorState(sensor_2_state, state);
             logInfo("Sensor 2 state updated: " + String(sensor_2_state));
             Serial.println(sensor_2_state);
             playSound();
         } else if (strcmp(entity_id, SENSOR_3_ENTITY_ID) == 0) {
-            strcpy(sensor_3_state, state);
+            copySensorState(sensor_3_state, state);
             logInfo("Sensor 3 state updated: " + String(sensor_3_state));
             Serial.println(sensor_3_state);
 

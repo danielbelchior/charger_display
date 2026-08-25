@@ -8,6 +8,32 @@ WebSocketsServer webSocket = WebSocketsServer(81); // WebSocket on port 81
 
 void handleWebSocketEvents(uint8_t num, WStype_t type, uint8_t * payload, size_t length);
 
+bool isValidBrightness(const String& value) {
+    if (value.length() == 0) {
+        return false;
+    }
+
+    for (size_t i = 0; i < value.length(); i++) {
+        if (!isDigit(value[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool isValidSensorState(const String& state) {
+    if (state.length() == 0 || state.length() >= sizeof(sensor_1_state)) {
+        return false;
+    }
+
+    for (size_t i = 0; i < state.length(); i++) {
+        if (!isAlphaNumeric(state[i]) && state[i] != '_' && state[i] != '-') {
+            return false;
+        }
+    }
+    return true;
+}
+
 void setupHttpServer() {
     server.begin();
     logInfo("HTTP server started on port 80");
@@ -25,8 +51,8 @@ void handleHttpRequests() {
     // logInfo("New HTTP client.");
     
     // Wait for data to be available
-    unsigned long timeout = millis() + 200; // 200ms timeout
-    while(!client.available() && millis() < timeout) {
+    unsigned long requestStartedAt = millis();
+    while(!client.available() && millis() - requestStartedAt < 200) {
         delay(1);
     }
     if(!client.available()){
@@ -36,6 +62,7 @@ void handleHttpRequests() {
     }
 
     // Read the first line of the request
+    client.setTimeout(200);
     String req = client.readStringUntil('\r');
     client.flush(); // Clear the rest of the request from the buffer
 
@@ -65,7 +92,7 @@ void handleHttpRequests() {
         jsonDoc["displayBrightness"] = displayBrightness;
         jsonDoc["should_render"] = should_render;
         jsonDoc["free_heap"] = ESP.getFreeHeap();
-        jsonDoc["wifi_last_connect_attempt"] = wifiLastConnectAttempt / 1000;
+        jsonDoc["wifi_last_connect_attempt"] = wifi_connected ? (millis() - wifiLastConnectAttempt) / 1000 : 0;
         jsonDoc["current_time"] = timeClient.getFormattedTime();
 
         JsonArray logData = jsonDoc.createNestedArray("logBuffer");
@@ -114,7 +141,7 @@ void handleHttpRequests() {
         logInfo(String("HTTP GET /config/display_brightness/") + newBrightness + " request received.");
         logInfo(String("Updating brightness from:") + displayBrightness + " to: " + newBrightness);
 
-        if (newBrightness >= 0 && newBrightness <= 255) {
+        if (isValidBrightness(valueStr) && newBrightness <= 255) {
             displayBrightness = newBrightness;
             strip.setBrightness(displayBrightness);
             logInfo("Display brightness set to: " + String(newBrightness));
@@ -145,8 +172,15 @@ void handleHttpRequests() {
         String sensorState = params.substring(slashIndex + 1);
         logInfo(String("HTTP GET /config/update_state/") + sensorId + "/" + sensorState + " request received.");
 
-        if (sensorId == 1) {
-            strcpy(sensor_1_state, sensorState.c_str());
+        if (!isValidSensorState(sensorState)) {
+            client.println("HTTP/1.1 400 Bad Request");
+            client.println("Content-Type: application/json");
+            client.println("Access-Control-Allow-Origin: *");
+            client.println("Connection: close");
+            client.println();
+            client.print("{\"status\":\"error\", \"message\":\"Sensor state must be 1 to 15 letters, numbers, underscores, or hyphens.\"}");
+        } else if (sensorId == 1) {
+            copySensorState(sensor_1_state, sensorState);
             logInfo("Manually updated sensor 1 state to: " + sensorState);
             client.println("HTTP/1.1 200 OK");
             client.println("Content-Type: application/json");
@@ -155,7 +189,7 @@ void handleHttpRequests() {
             client.println();
             client.print("{\"status\":\"ok\", \"sensor_id\":1, \"new_state\":\"" + sensorState + "\"}");
         } else if (sensorId == 2) {
-            strcpy(sensor_2_state, sensorState.c_str());
+            copySensorState(sensor_2_state, sensorState);
             logInfo("Manually updated sensor 2 state to: " + sensorState);
             client.println("HTTP/1.1 200 OK");
             client.println("Content-Type: application/json");
@@ -209,7 +243,7 @@ void handleWebSocketStatus(uint8_t num) {
     jsonDoc["displayBrightness"] = displayBrightness;
     jsonDoc["should_render"] = should_render;
     jsonDoc["free_heap"] = ESP.getFreeHeap();
-    jsonDoc["wifi_last_connect_attempt"] = wifiLastConnectAttempt / 1000;
+    jsonDoc["wifi_last_connect_attempt"] = wifi_connected ? (millis() - wifiLastConnectAttempt) / 1000 : 0;
     jsonDoc["current_time"] = timeClient.getFormattedTime();
 
     JsonArray logData = jsonDoc.createNestedArray("logBuffer");

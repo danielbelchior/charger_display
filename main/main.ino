@@ -27,6 +27,7 @@ char sensor_1_state[16] = "unknown";
 char sensor_2_state[16] = "unknown";
 char sensor_3_state[16] = "unknown";
 bool ws_connected = false;
+bool refreshHassStates = false;
 
 // WiFi
 WiFiServer server(HTTP_PORT);
@@ -72,12 +73,17 @@ void connectToWifi() {
     wifiRetryDelay = min(wifiRetryDelay * 2, WIFI_RETRY_MAX_DELAY);
 }
 
+void copySensorState(char* destination, const String& state) {
+    state.toCharArray(destination, 16);
+}
+
 void handleWifiConnected() {
     wifi_connected = true;
     wifiLastConnectAttempt = millis();
     wifiRetryDelay = WIFI_RETRY_INITIAL_DELAY;
     logInfo("WiFi connected!");
     logInfo("IP address: " + WiFi.localIP().toString());
+    timeClient.update();
 
     if (!MDNS.begin("charger")) {
         logError("Error starting mDNS");
@@ -148,14 +154,13 @@ void setup() {
 
     // NTP setup
     timeClient.begin();
-    timeClient.update();
     playSound(1, 50, 400);
 }
 
 void getEntitiesState() {
-    strcpy(sensor_1_state, getEntityState(SENSOR_1_ENTITY_ID).c_str());
-    strcpy(sensor_2_state, getEntityState(SENSOR_2_ENTITY_ID).c_str());
-    strcpy(sensor_3_state, getEntityState(SENSOR_3_ENTITY_ID).c_str());
+    copySensorState(sensor_1_state, getEntityState(SENSOR_1_ENTITY_ID));
+    copySensorState(sensor_2_state, getEntityState(SENSOR_2_ENTITY_ID));
+    copySensorState(sensor_3_state, getEntityState(SENSOR_3_ENTITY_ID));
     logInfo("Sensor 1 state: " + String(sensor_1_state));
     logInfo("Sensor 2 state: " + String(sensor_2_state));
     logInfo("Sensor 3 state: " + String(sensor_3_state));
@@ -186,6 +191,10 @@ void loop() {
             }
         }
         loopHass(); // Process WebSocket messages
+        if (refreshHassStates) {
+            refreshHassStates = false;
+            getEntitiesState();
+        }
     }
 
     // --- Timed Display Update ---

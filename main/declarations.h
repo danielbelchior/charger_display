@@ -59,6 +59,7 @@ extern char sensor_1_state[16];
 extern char sensor_2_state[16];
 extern char sensor_3_state[16];
 extern bool ws_connected;
+extern bool refreshHassStates;
 
 // WiFi
 extern WiFiUDP udp;
@@ -85,6 +86,7 @@ extern NTPClient timeClient;
 // Functions that are in main.ino but called from other files
 void playSound(int beeps = 2, int delayBetweenBeep = 50, int duration = 100);
 void connectToWifi();
+void copySensorState(char* destination, const String& state);
 
 
 #endif // DECLARATIONS_H

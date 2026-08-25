@@ -127,13 +127,9 @@ int getPixelIndex(int row, int col) {
 uint8_t highlightBrightness(uint8_t tone) {
     // Add a fixed value to each color component to make it visibly brighter.
     const uint8_t brightness_increase = 50;
-    //uint16_t new_tone = tone + brightness_increase;
-    uint16_t new_tone = tone - brightness_increase;
+    uint16_t new_tone = tone + brightness_increase;
     if (new_tone > 255) {
         new_tone = 255;
-    }
-    if (new_tone < 0) {
-        new_tone = 0;
     }
     return (uint8_t)new_tone;
 }
