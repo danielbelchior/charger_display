@@ -48,9 +48,11 @@ const unsigned long interval = 1000; // 1 second
 const unsigned long WIFI_RETRY_INITIAL_DELAY = 5000;
 const unsigned long WIFI_RETRY_MAX_DELAY = 60000;
 const unsigned long HASS_RETRY_DELAY = 10000;
+const unsigned long CONNECTION_FAILURE_RESTART_DELAY = 30000;
 unsigned long nextWifiRetryAt = 0;
 unsigned long wifiRetryDelay = WIFI_RETRY_INITIAL_DELAY;
 unsigned long nextHassRetryAt = 0;
+unsigned long connectionFailureStartedAt = 0;
 bool httpServerStarted = false;
 
 // Logging
@@ -130,6 +132,26 @@ void handleWifiConnection() {
     }
 }
 
+void handleConnectionWatchdog() {
+    if (wifi_connected && ws_connected) {
+        connectionFailureStartedAt = 0;
+        return;
+    }
+
+    unsigned long now = millis();
+    if (connectionFailureStartedAt == 0) {
+        connectionFailureStartedAt = now;
+        logWarning("WiFi or Home Assistant disconnected. Restarting in 30 seconds if not restored.");
+        return;
+    }
+
+    if (now - connectionFailureStartedAt >= CONNECTION_FAILURE_RESTART_DELAY) {
+        logError("WiFi or Home Assistant unavailable for 30 seconds. Restarting firmware.");
+        delay(100);
+        ESP.restart();
+    }
+}
+
 
 
 // --- Main Functions ---
@@ -196,6 +218,7 @@ void loop() {
             getEntitiesState();
         }
     }
+    handleConnectionWatchdog();
 
     // --- Timed Display Update ---
     unsigned long now = millis();
