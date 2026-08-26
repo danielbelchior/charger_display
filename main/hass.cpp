@@ -1,6 +1,40 @@
 #include "hass.h"
 #include "logging.h"
 
+const char* const DOOR_SENSOR_ENTITY_IDS[] = {
+    "binary_sensor.door_backyard_contact",
+    "binary_sensor.door_0_coffee_contact",
+    "binary_sensor.door_0_kitchen_contact"
+};
+const size_t DOOR_SENSOR_COUNT = sizeof(DOOR_SENSOR_ENTITY_IDS) / sizeof(DOOR_SENSOR_ENTITY_IDS[0]);
+
+void subscribeToState(const char* entityId) {
+    JsonDocument subscription;
+    subscription["id"] = hass_message_id++;
+    subscription["type"] = "subscribe_trigger";
+    JsonObject trigger = subscription.createNestedObject("trigger");
+    trigger["platform"] = "state";
+    trigger["entity_id"] = entityId;
+
+    String serializedSubscription;
+    serializeJson(subscription, serializedSubscription);
+    client.send(serializedSubscription);
+    logInfo("Subscribing to " + String(entityId));
+}
+
+bool isDoorSensor(const char* entityId) {
+    for (size_t i = 0; i < DOOR_SENSOR_COUNT; i++) {
+        if (strcmp(entityId, DOOR_SENSOR_ENTITY_IDS[i]) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool isTrueState(const char* state) {
+    return strcmp(state, "on") == 0 || strcmp(state, "true") == 0;
+}
+
 // This will be called from the main setup()
 void setupHass() {
     static bool callbacksRegistered = false;
@@ -77,41 +111,12 @@ void onMessage(WebsocketsMessage message) {
     } else if (strcmp(type, "auth_ok") == 0) {
         logInfo("Auth OK!");
 
-        // Subscribe to sensor 1
-        JsonDocument sub_msg_1;
-        sub_msg_1["id"] = hass_message_id++;
-        sub_msg_1["type"] = "subscribe_trigger";
-        JsonObject trigger1 = sub_msg_1.createNestedObject("trigger");
-        trigger1["platform"] = "state";
-        trigger1["entity_id"] = SENSOR_1_ENTITY_ID;
-        String sub_str_1;
-        serializeJson(sub_msg_1, sub_str_1);
-        client.send(sub_str_1);
-        logInfo("Subscribing to " + String(SENSOR_1_ENTITY_ID));
-
-        // Subscribe to sensor 2
-        JsonDocument sub_msg_2;
-        sub_msg_2["id"] = hass_message_id++;
-        sub_msg_2["type"] = "subscribe_trigger";
-        JsonObject trigger2 = sub_msg_2.createNestedObject("trigger");
-        trigger2["platform"] = "state";
-        trigger2["entity_id"] = SENSOR_2_ENTITY_ID;
-        String sub_str_2;
-        serializeJson(sub_msg_2, sub_str_2);
-        client.send(sub_str_2);
-        logInfo("Subscribing to " + String(SENSOR_2_ENTITY_ID));
-
-        // Subscribe to sensor compressor
-        JsonDocument sub_msg_3;
-        sub_msg_3["id"] = hass_message_id++;
-        sub_msg_3["type"] = "subscribe_trigger";
-        JsonObject trigger3 = sub_msg_3.createNestedObject("trigger");
-        trigger3["platform"] = "state";
-        trigger3["entity_id"] = SENSOR_3_ENTITY_ID;
-        String sub_str_3;
-        serializeJson(sub_msg_3, sub_str_3);
-        client.send(sub_str_3);
-        logInfo("Subscribing to " + String(SENSOR_3_ENTITY_ID));
+        subscribeToState(SENSOR_1_ENTITY_ID);
+        subscribeToState(SENSOR_2_ENTITY_ID);
+        subscribeToState(SENSOR_3_ENTITY_ID);
+        for (size_t i = 0; i < DOOR_SENSOR_COUNT; i++) {
+            subscribeToState(DOOR_SENSOR_ENTITY_IDS[i]);
+        }
         refreshHassStates = true;
 
     } else if (strcmp(type, "auth_invalid") == 0) {
@@ -122,8 +127,14 @@ void onMessage(WebsocketsMessage message) {
         JsonObject trigger = variables["trigger"];
         const char* entity_id = trigger["entity_id"] | "";
         const char* state = trigger["to_state"]["state"] | "unknown";
+        const char* previousState = trigger["from_state"]["state"] | "";
 
-        if (strcmp(entity_id, SENSOR_1_ENTITY_ID) == 0) {
+        if (isDoorSensor(entity_id)) {
+            if (isTrueState(state) && !isTrueState(previousState)) {
+                logInfo("Door opened: " + String(entity_id));
+                playSound(1, 50, 100);
+            }
+        } else if (strcmp(entity_id, SENSOR_1_ENTITY_ID) == 0) {
             copySensorState(sensor_1_state, state);
             logInfo("Sensor 1 state updated: " + String(sensor_1_state));
             playSound();
