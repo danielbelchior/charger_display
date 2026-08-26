@@ -4,7 +4,8 @@
 const char* const DOOR_SENSOR_ENTITY_IDS[] = {
     "binary_sensor.door_backyard_contact",
     "binary_sensor.door_0_coffee_contact",
-    "binary_sensor.door_0_kitchen_contact"
+    "binary_sensor.door_0_kitchen_contact",
+    "binary_sensor.presence_backyard_door_occupancy"
 };
 const size_t DOOR_SENSOR_COUNT = sizeof(DOOR_SENSOR_ENTITY_IDS) / sizeof(DOOR_SENSOR_ENTITY_IDS[0]);
 
