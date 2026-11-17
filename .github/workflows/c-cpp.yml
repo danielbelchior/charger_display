@@ -1,52 +1,62 @@
-name: Arduino CI
+name: Firmware CI
 
 on:
   push:
     paths:
       - "main/**"
+      - "tests/**"
+      - "scripts/**"
+      - "platformio.ini"
       - ".github/workflows/**"
   pull_request:
     paths:
       - "main/**"
+      - "tests/**"
+      - "scripts/**"
+      - "platformio.ini"
       - ".github/workflows/**"
 
 jobs:
-  build:
+  host-tests:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Run host unit tests
+        run: scripts/test.sh
+
+  build:
+    runs-on: ubuntu-latest
+    needs: host-tests
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PlatformIO
+        run: pip install --upgrade platformio
+
       - name: Prepare secrets.h
         run: cp main/secrets_template.h main/secrets.h
 
-      - name: Install Arduino CLI
-        uses: arduino/setup-arduino-cli@v2
-        with:
-          version: "1.3.1"
+      - name: Compile
+        run: pio run -e usb
 
-      - name: Install ESP32 platform
+      - name: Compile with OTA enabled
         run: |
-          arduino-cli config init --overwrite
-          arduino-cli core update-index
-          arduino-cli core install esp32:esp32
-
-      - name: Install libraries (if needed)
-        run: |
-          arduino-cli lib install "ArduinoJson"
-          arduino-cli lib install "Adafruit NeoPixel"
-          arduino-cli lib install "NTPClient"
-          arduino-cli lib install "ArduinoSTL"
-          arduino-cli lib install "WebSockets"
-          arduino-cli lib install "ArduinoWebsockets"
-          git clone https://github.com/dawidchyrzynski/arduino-home-assistant.git /home/runner/Arduino/libraries/arduino-home-assistant
-
-
-          # add more libraries here if your sketch needs them
-
-      - name: Compile sketch for ESP32 Dev Module
-        run: |
-          arduino-cli compile \
-            --fqbn esp32:esp32:esp32 \
-            main/main.ino
+          echo '#define ENABLE_OTA 1' >> main/secrets.h
+          pio run -e ota

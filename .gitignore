@@ -56,3 +56,9 @@ dkms.conf
 
 #secrets
 secrets.h
+
+# Build output (host tests, PlatformIO)
+build/
+.pio/
+__pycache__/
+.DS_Store

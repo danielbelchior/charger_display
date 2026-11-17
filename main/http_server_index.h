@@ -1,3 +1,619 @@
 const char index_html[] PROGMEM = R"rawliteral(
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Charger Display</title><script src="https://cdn.tailwindcss.com"></script><style>.log-info{color:green}.log-warning{color:orange}.log-error{color:red}.log-debug{color:gray}</style></head><body class="flex flex-col items-center justify-center min-h-screen bg-gray-100 space-y-6 p-4"><div class="flex space-x-6 bg-white p-4 rounded-lg shadow-md"><div><h2 class="text-lg font-semibold mb-2">Display</h2><div id="matrix" class="grid grid-cols-8 gap-1"></div></div><div class="space-y-2"><h2 class="text-lg font-semibold mb-2">Status</h2><div><strong>Date Time:</strong> <span id="current_time">-</span></div><div><strong>Uptime:</strong> <span id="uptime">-</span></div><div><strong>Wifi Uptime:</strong> <span id="wifi_last_connect_attempt">-</span></div><div><strong>IP Address:</strong> <span id="ip_address">-</span></div><div><strong>HASS Connected:</strong> <span id="ws_connected">-</span></div><div><strong>Free Heap:</strong> <span id="free_heap">-</span></div><div><label class="font-semibold">Sensor 1 State:</label> <select id="sensor_1_state" class="border rounded p-1"><option value="unknown">unknown</option><option value="off">off</option><option value="disconnected">disconnected</option><option value="charging">charging</option></select></div><div><label class="font-semibold">Sensor 2 State:</label> <select id="sensor_2_state" class="border rounded p-1"><option value="unknown">unknown</option><option value="off">off</option><option value="disconnected">disconnected</option><option value="charging">charging</option></select></div><div><label class="font-semibold">Display Brightness:</label> <input id="displayBrightness" type="range" min="1" max="253" class="w-40"> <span id="brightnessValue">-</span></div></div></div><div class="bg-gray-50 p-2 rounded-lg shadow-md max-w-3xl w-full"><h2 class="text-sm font-semibold mb-1">Logs</h2><div id="logs" class="font-mono text-xs space-y-1 max-h-80 overflow-y-auto"></div></div><button id="restartBtn" title="Restart" class="fixed top-4 right-4 z-50 bg-white border border-gray-300 shadow-lg rounded-full p-3 hover:bg-red-100 transition" style="font-size:2rem">🔄</button><script>let ws,statusInterval,messagesThisSecond=0;function connectWebSocket(){(ws=new WebSocket((location.protocol==="https:"?"wss":"ws")+"://"+location.hostname+":81/")).onopen=()=>{console.log("✅ WebSocket connected"),ws.send("status"),statusInterval=setInterval(()=>{ws.readyState===WebSocket.OPEN&&ws.send("status")},1e3)},ws.onmessage=t=>{messagesThisSecond++;try{var o=JSON.parse(t.data);if("number"==typeof o.uptime){var a=o.uptime,r=Math.floor(a/86400),l=Math.floor(a%86400/3600),c=Math.floor(a%3600/60);let e="";0<r&&(e+=r+"d "),(0<l||0<r)&&(e+=l+"h "),e+=c+"m",document.getElementById("uptime").textContent=e}else document.getElementById("uptime").textContent="-";if("number"==typeof o.wifi_last_connect_attempt){var d=o.wifi_last_connect_attempt,m=Math.floor(d/86400),i=Math.floor(d%86400/3600),g=Math.floor(d%3600/60);let e="";0<m&&(e+=m+"d "),(0<i||0<m)&&(e+=i+"h "),e+=g+"m",document.getElementById("wifi_last_connect_attempt").textContent=e}else document.getElementById("wifi_last_connect_attempt").textContent="-";document.getElementById("current_time").textContent=o.current_time??"-",document.getElementById("ip_address").textContent=o.ip_address??"-",document.getElementById("ws_connected").textContent=o.ws_connected?"Yes":"No","number"==typeof o.free_heap?document.getElementById("free_heap").textContent=(o.free_heap/1024).toFixed(1)+" KB":document.getElementById("free_heap").textContent=o.free_heap??"-",o.sensor_1_state&&(document.getElementById("sensor_1_state").value=o.sensor_1_state),o.sensor_2_state&&(document.getElementById("sensor_2_state").value=o.sensor_2_state),void 0!==o.displayBrightness&&(document.getElementById("displayBrightness").value=o.displayBrightness,document.getElementById("brightnessValue").textContent=o.displayBrightness);let s=document.getElementById("matrix"),n=(s.innerHTML="",o.displayArray.forEach(e=>{e.forEach(e=>{var t=e>>16&255,n=e>>8&255,e=255&e,o=document.createElement("div");o.style.backgroundColor=`rgb(${t}, ${n}, ${e})`,o.className="w-8 h-8 border border-gray-200",s.appendChild(o)})}),document.getElementById("logs"));n.innerHTML="",o.logBuffer&&o.logBuffer.slice().reverse().forEach(e=>{var t=document.createElement("div");e.includes(" INFO: ")?t.className="log-info":e.includes(" WARNING: ")?t.className="log-warning":e.includes(" ERROR: ")?t.className="log-error":e.includes(" DEBUG: ")&&(t.className="log-debug"),t.textContent=e,n.appendChild(t)})}catch(e){console.error("JSON parse error:",e,t.data)}},ws.onclose=()=>{console.log("⚠️ WebSocket disconnected, retrying in 2s..."),clearInterval(statusInterval),setTimeout(connectWebSocket,2e3)},ws.onerror=e=>{console.error("❌ WebSocket error:",e),ws.close()}}connectWebSocket(),document.getElementById("sensor_1_state").addEventListener("change",e=>{let t=e.target.value;fetch(location.origin+"/config/update_state/1/"+t).then(()=>console.log("Sensor 1 atualizado:",t))}),document.getElementById("sensor_2_state").addEventListener("change",e=>{let t=e.target.value;fetch(location.origin+"/config/update_state/2/"+t).then(()=>console.log("Sensor 2 atualizado:",t))}),document.getElementById("displayBrightness").addEventListener("input",e=>{e=e.target.value;document.getElementById("brightnessValue").textContent=e}),document.getElementById("displayBrightness").addEventListener("change",e=>{let t=e.target.value;fetch(location.origin+"/config/display_brightness/"+t).then(()=>console.log("Brilho atualizado:",t))}),document.getElementById("restartBtn").addEventListener("click",function(){confirm("Are you sure you want to restart the system?")&&fetch(location.origin+"/boot",{method:"POST"}).then(e=>e.json()).then(e=>{alert("Restart command sent! System will reboot.")}).catch(e=>{alert("Failed to send restart command: "+e)})})</script></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0d0f12">
+<title>Charger Display</title>
+<style>
+:root {
+  --bg: #0b0d10;
+  --panel: #12151a;
+  --panel-2: #171b21;
+  --line: #242a33;
+  --line-soft: #1c2129;
+  --text: #e8e4dc;
+  --muted: #8a919c;
+  --faint: #5a616c;
+  --amber: #ffb000;
+  --amber-soft: rgba(255, 176, 0, .14);
+  --cyan: #2de2e6;
+  --magenta: #ff3fb4;
+  --blue: #4d7cff;
+  --yellow: #ffd23f;
+  --red: #ff4d4d;
+  --green: #3ddc84;
+  --radius: 14px;
+  --display: "Bahnschrift", "DIN Alternate", "DIN Condensed", "Avenir Next Condensed", "Roboto Condensed", "Arial Narrow", sans-serif;
+  --mono: "JetBrains Mono", "SF Mono", "Cascadia Code", "IBM Plex Mono", Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(1200px 600px at 85% -10%, rgba(255, 176, 0, .07), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(45, 226, 230, .05), transparent 60%),
+    linear-gradient(var(--line-soft) 1px, transparent 1px) 0 0 / 32px 32px,
+    linear-gradient(90deg, var(--line-soft) 1px, transparent 1px) 0 0 / 32px 32px,
+    var(--bg);
+  background-attachment: fixed;
+  color: var(--text);
+  font: 15px/1.45 var(--display);
+  letter-spacing: .01em;
+  -webkit-font-smoothing: antialiased;
+}
+button, input, select { font: inherit; color: inherit; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 28px 22px 48px; }
+
+/* ---------- header ---------- */
+header {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 20px;
+  flex-wrap: wrap; margin-bottom: 26px;
+}
+.brand { display: flex; align-items: center; gap: 14px; }
+.brand-mark {
+  width: 42px; height: 42px; border-radius: 10px; display: grid; place-items: center;
+  background: var(--amber); color: #1a1200; box-shadow: 0 0 0 4px var(--amber-soft), 0 8px 30px rgba(255, 176, 0, .25);
+}
+.brand-mark svg { width: 24px; height: 24px; }
+.brand h1 {
+  margin: 0; font-size: 26px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; line-height: 1;
+}
+.brand h1 span { color: var(--amber); }
+.brand small { display: block; margin-top: 6px; color: var(--muted); font-family: var(--mono); font-size: 12px; letter-spacing: .04em; }
+.header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.clock { font-family: var(--mono); font-size: 13px; color: var(--muted); margin-right: 6px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 999px;
+  background: var(--panel); border: 1px solid var(--line); font-size: 12px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--muted);
+}
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
+.chip.ok .dot { background: var(--green); box-shadow: 0 0 10px var(--green); animation: pulse 2.4s ease-in-out infinite; }
+.chip.bad .dot { background: var(--red); box-shadow: 0 0 10px var(--red); }
+.chip.ok { color: var(--text); }
+
+/* ---------- layout ---------- */
+.grid { display: grid; gap: 18px; grid-template-columns: 380px minmax(0, 1fr); }
+.grid > *, .stack > *, .bays > * { min-width: 0; }
+.card {
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--line); border-radius: var(--radius); padding: 20px;
+  position: relative; animation: rise .6s cubic-bezier(.2, .7, .2, 1) both;
+}
+.card h2 {
+  margin: 0 0 16px; font-size: 12px; font-weight: 600; letter-spacing: .22em; text-transform: uppercase; color: var(--muted);
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+.card h2 .tag { font-family: var(--mono); letter-spacing: .04em; text-transform: none; color: var(--faint); font-weight: 400; }
+.stack { display: flex; flex-direction: column; gap: 18px; }
+.stack > .card:last-child { flex: 1; display: flex; flex-direction: column; }
+.d1 { animation-delay: .05s; } .d2 { animation-delay: .12s; } .d3 { animation-delay: .19s; }
+.d4 { animation-delay: .26s; } .d5 { animation-delay: .33s; }
+
+/* ---------- LED panel ---------- */
+.bezel {
+  position: relative; padding: 22px; border-radius: 16px;
+  background: linear-gradient(145deg, #1d2128, #0c0e11);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06), inset 0 -2px 0 rgba(0, 0, 0, .5), 0 20px 40px rgba(0, 0, 0, .45);
+}
+.bezel::before, .bezel::after, .bezel .screw-b::before, .bezel .screw-b::after {
+  content: ""; position: absolute; width: 7px; height: 7px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #59606b, #23272e 70%);
+}
+.bezel::before { top: 8px; left: 8px; } .bezel::after { top: 8px; right: 8px; }
+.bezel .screw-b::before { bottom: 8px; left: 8px; } .bezel .screw-b::after { bottom: 8px; right: 8px; }
+.matrix {
+  display: grid; grid-template-columns: repeat(8, 1fr); gap: 7px; padding: 14px; border-radius: 8px;
+  background: #050607; box-shadow: inset 0 0 24px rgba(0, 0, 0, .9);
+}
+.led {
+  aspect-ratio: 1; border-radius: 50%; background: #15181c;
+  box-shadow: inset 0 -2px 3px rgba(0, 0, 0, .6);
+  transition: background-color .35s ease, box-shadow .35s ease;
+}
+.legend { display: flex; justify-content: space-between; margin-top: 14px; font-size: 12px; letter-spacing: .18em; text-transform: uppercase; }
+.legend .l1 { color: var(--cyan); } .legend .l2 { color: var(--magenta); }
+
+/* ---------- chargers ---------- */
+.bays { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.bay { --accent: var(--cyan); overflow: hidden; }
+.bay.b2 { --accent: var(--magenta); }
+.bay::before {
+  content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--accent);
+  box-shadow: 0 0 18px var(--accent);
+}
+.bay-head { display: flex; align-items: baseline; justify-content: space-between; }
+.bay-id { font-size: 12px; letter-spacing: .22em; text-transform: uppercase; color: var(--accent); }
+.bay-num { font-size: 64px; font-weight: 700; line-height: .9; color: rgba(255, 255, 255, .05); position: absolute; right: 18px; top: 14px; }
+.state { margin: 18px 0 6px; font-size: 34px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; line-height: 1; }
+.state-sub { color: var(--muted); font-size: 13px; min-height: 19px; }
+.meter { display: flex; gap: 5px; margin: 18px 0; height: 10px; }
+.meter i { flex: 1; border-radius: 2px; background: var(--line); }
+.bay[data-state="charging"] .state { color: var(--blue); }
+.bay[data-state="charging"] .meter i { background: var(--blue); animation: flow 1.6s ease-in-out infinite; }
+.bay[data-state="charging"] .meter i:nth-child(2) { animation-delay: .15s; }
+.bay[data-state="charging"] .meter i:nth-child(3) { animation-delay: .3s; }
+.bay[data-state="charging"] .meter i:nth-child(4) { animation-delay: .45s; }
+.bay[data-state="charging"] .meter i:nth-child(5) { animation-delay: .6s; }
+.bay[data-state="charging"] .meter i:nth-child(6) { animation-delay: .75s; }
+.bay[data-state="disconnected"] .state { color: var(--yellow); }
+.bay[data-state="disconnected"] .meter i:nth-child(odd) { background: rgba(255, 210, 63, .35); }
+.bay[data-state="unknown"] .state, .bay[data-state="error"] .state { color: var(--red); }
+.bay[data-state="unknown"] .meter i, .bay[data-state="error"] .meter i { animation: blink 1.4s steps(2) infinite; background: rgba(255, 77, 77, .35); }
+.bay[data-state="off"] .state { color: var(--faint); }
+.seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 4px; border-radius: 10px; background: #0c0e11; border: 1px solid var(--line); }
+.seg button {
+  border: 0; background: transparent; padding: 8px 2px; border-radius: 7px; cursor: pointer;
+  font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+  transition: background .2s, color .2s;
+}
+.seg button:hover { color: var(--text); background: var(--line-soft); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #071012; font-weight: 700; }
+.override-label { margin: 0 0 8px; font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--faint); }
+
+/* ---------- telemetry ---------- */
+.stats { flex: 1; margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 1fr; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.stat { background: var(--panel); padding: 14px 16px; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+.stat dt { font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--faint); margin-bottom: 6px; }
+.stat dd { margin: 0; font-size: 22px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat dd small { font-size: 12px; color: var(--muted); font-weight: 400; margin-left: 4px; }
+.stat .mono { font-family: var(--mono); font-size: 16px; }
+.bars { display: inline-flex; align-items: flex-end; gap: 3px; height: 18px; margin-right: 8px; vertical-align: -2px; }
+.bars i { width: 5px; border-radius: 1px; background: var(--line); }
+.bars i:nth-child(1) { height: 25%; } .bars i:nth-child(2) { height: 50%; } .bars i:nth-child(3) { height: 75%; } .bars i:nth-child(4) { height: 100%; }
+.bars[data-level="1"] i:nth-child(-n+1) { background: var(--red); }
+.bars[data-level="2"] i:nth-child(-n+2) { background: var(--yellow); }
+.bars[data-level="3"] i:nth-child(-n+3) { background: var(--green); }
+.bars[data-level="4"] i:nth-child(-n+4) { background: var(--green); }
+
+/* ---------- controls ---------- */
+.controls { gap: 18px; }
+.controls .actions { margin-top: auto; }
+.slider-row { display: flex; align-items: center; gap: 14px; }
+.slider-row output { font-family: var(--mono); font-size: 20px; min-width: 3ch; text-align: right; color: var(--amber); }
+input[type=range] { -webkit-appearance: none; appearance: none; flex: 1; height: 6px; border-radius: 6px; cursor: pointer;
+  background: linear-gradient(90deg, var(--amber) var(--fill, 10%), var(--line) var(--fill, 10%)); }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; background: var(--text);
+  border: 4px solid var(--amber); box-shadow: 0 0 0 6px var(--amber-soft); }
+input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--text); border: 4px solid var(--amber); box-shadow: 0 0 0 6px var(--amber-soft); }
+.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 9px; padding: 12px 14px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--panel-2); cursor: pointer; font-size: 12px; letter-spacing: .16em; text-transform: uppercase;
+  transition: border-color .2s, background .2s, transform .1s;
+}
+.btn:hover { border-color: var(--amber); }
+.btn:active { transform: translateY(1px); }
+.btn svg { width: 16px; height: 16px; }
+.btn.danger:hover { border-color: var(--red); color: var(--red); background: rgba(255, 77, 77, .08); }
+.alert-sensor { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-radius: 10px; background: #0c0e11; border: 1px solid var(--line); }
+.alert-sensor span { font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--faint); }
+.alert-sensor b { font-family: var(--mono); font-weight: 500; }
+.alert-sensor b.on { color: var(--amber); }
+
+/* ---------- logs ---------- */
+.logs-card { grid-column: 1 / -1; }
+.filters { display: flex; gap: 6px; }
+.filters button { border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 3px 10px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); cursor: pointer; }
+.filters button[aria-pressed="true"] { border-color: var(--amber); color: var(--amber); background: var(--amber-soft); }
+.console {
+  font-family: var(--mono); font-size: 12.5px; line-height: 1.7; max-height: 340px; overflow-y: auto; padding: 14px 16px;
+  background: #07080a; border: 1px solid var(--line); border-radius: 10px;
+  scrollbar-width: thin; scrollbar-color: var(--line) transparent;
+}
+.console .row { display: grid; grid-template-columns: 82px 74px 1fr; gap: 10px; white-space: pre-wrap; word-break: break-word; }
+.console .t { color: var(--faint); }
+.console .lv { font-weight: 600; }
+.console .INFO .lv { color: var(--green); } .console .WARNING .lv { color: var(--amber); }
+.console .ERROR .lv { color: var(--red); } .console .ERROR .m { color: #ffb3b3; } .console .DEBUG .lv { color: var(--faint); }
+.console .empty { color: var(--faint); }
+.console.only-warn .INFO, .console.only-warn .DEBUG { display: none; }
+.console.only-err .INFO, .console.only-err .DEBUG, .console.only-err .WARNING { display: none; }
+
+/* ---------- toast ---------- */
+.toast {
+  position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0; pointer-events: none;
+  padding: 11px 18px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); border-left: 3px solid var(--amber);
+  font-size: 13px; letter-spacing: .04em; box-shadow: 0 10px 30px rgba(0, 0, 0, .5); transition: opacity .25s, transform .25s;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+.toast.err { border-left-color: var(--red); }
+.offline-banner { display: none; margin-bottom: 18px; padding: 12px 16px; border-radius: 10px; border: 1px dashed var(--red); color: #ffb3b3; font-size: 13px; letter-spacing: .04em; }
+body.stale .offline-banner { display: block; }
+body.stale .card { filter: saturate(.4); }
+
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes pulse { 50% { opacity: .45; } }
+@keyframes flow { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+@keyframes blink { 50% { opacity: .2; } }
+
+@media (max-width: 920px) {
+  .grid { grid-template-columns: minmax(0, 1fr); }
+  .stack { display: contents; }
+  .o1 { order: 1; } .o2 { order: 2; } .o3 { order: 3; } .o4 { order: 4; } .o5 { order: 5; }
+  .bezel { max-width: 420px; margin: 0 auto; }
+}
+@media (max-width: 560px) {
+  .wrap { padding: 18px 14px 40px; }
+  .bays { grid-template-columns: 1fr; }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stat:last-child { grid-column: span 2; }
+  .stat .mono { font-size: 13px; }
+  .header-right { width: 100%; }
+  .bay-num { font-size: 48px; }
+  .console .row { grid-template-columns: 70px 1fr; }
+  .console .lv { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>
+      </div>
+      <div>
+        <h1>Charger<span>/</span>Display</h1>
+        <small id="host">-</small>
+      </div>
+    </div>
+    <div class="header-right">
+      <span class="clock" id="current_time">--:--:--</span>
+      <span class="chip" id="chip-link"><i class="dot"></i>Link</span>
+      <span class="chip" id="chip-wifi"><i class="dot"></i>WiFi</span>
+      <span class="chip" id="chip-hass"><i class="dot"></i>Home Assistant</span>
+    </div>
+  </header>
+
+  <div class="offline-banner">Lost contact with the display. Reconnecting...</div>
+
+  <div class="grid">
+    <div class="stack">
+      <section class="card d1 o1">
+        <h2>Live matrix <span class="tag">8 × 8 WS2812B</span></h2>
+        <div class="bezel"><div class="screw-b"></div><div class="matrix" id="matrix"></div></div>
+        <div class="legend"><span class="l1">◀ Bay 1</span><span class="l2">Bay 2 ▶</span></div>
+      </section>
+
+      <section class="card d4 o4 controls">
+        <h2>Controls</h2>
+        <div>
+          <p class="override-label">LED brightness</p>
+          <div class="slider-row">
+            <input id="brightness" type="range" min="1" max="255" value="20" aria-label="LED brightness">
+            <output id="brightnessValue">-</output>
+          </div>
+        </div>
+        <div class="alert-sensor"><span>Alert sensor</span><b id="sensor_3_state">-</b></div>
+        <div class="actions">
+          <button class="btn" id="beepBtn" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg>
+            Test beep
+          </button>
+          <button class="btn danger" id="restartBtn" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+            Restart
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <div class="stack">
+      <div class="bays o2">
+        <section class="card bay b1 d2" id="bay1" data-state="unknown">
+          <span class="bay-num">01</span>
+          <div class="bay-head"><span class="bay-id">Bay 1 · Charger</span></div>
+          <div class="state" data-role="state">-</div>
+          <div class="state-sub" data-role="sub"></div>
+          <div class="meter"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <p class="override-label">Manual override</p>
+          <div class="seg" data-sensor="1"></div>
+        </section>
+        <section class="card bay b2 d3" id="bay2" data-state="unknown">
+          <span class="bay-num">02</span>
+          <div class="bay-head"><span class="bay-id">Bay 2 · Charger</span></div>
+          <div class="state" data-role="state">-</div>
+          <div class="state-sub" data-role="sub"></div>
+          <div class="meter"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <p class="override-label">Manual override</p>
+          <div class="seg" data-sensor="2"></div>
+        </section>
+      </div>
+
+      <section class="card d4 o3">
+        <h2>Telemetry <span class="tag">updates every second</span></h2>
+        <dl class="stats">
+          <div class="stat"><dt>Uptime</dt><dd id="uptime">-</dd></div>
+          <div class="stat"><dt>WiFi session</dt><dd id="wifi_uptime">-</dd></div>
+          <div class="stat"><dt>Signal</dt><dd><span class="bars" id="bars" data-level="0"><i></i><i></i><i></i><i></i></span><span id="rssi">-</span></dd></div>
+          <div class="stat"><dt>Free heap</dt><dd id="free_heap">-</dd></div>
+          <div class="stat"><dt>WiFi drops</dt><dd id="drops">-</dd></div>
+          <div class="stat"><dt>Last drop</dt><dd class="mono" id="last_reason">-</dd></div>
+          <div class="stat"><dt>IP address</dt><dd class="mono" id="ip_address">-</dd></div>
+          <div class="stat"><dt>Access point</dt><dd class="mono" id="bssid">-</dd></div>
+          <div class="stat"><dt>Channel</dt><dd id="channel">-</dd></div>
+        </dl>
+      </section>
+    </div>
+
+    <section class="card logs-card d5 o5">
+      <h2>Event log
+        <span class="filters" role="group" aria-label="Log level filter">
+          <button type="button" data-filter="" aria-pressed="true">All</button>
+          <button type="button" data-filter="only-warn" aria-pressed="false">Warn+</button>
+          <button type="button" data-filter="only-err" aria-pressed="false">Errors</button>
+        </span>
+      </h2>
+      <div class="console" id="logs"><div class="empty">Waiting for data...</div></div>
+    </section>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const STATES = ["charging", "disconnected", "off", "unknown"];
+  const LABELS = { charging: "Charging", disconnected: "Unplugged", off: "Off", unknown: "Unknown", error: "Error" };
+  const SUBS = {
+    charging: "Power is flowing to the battery",
+    disconnected: "Charger is not plugged into the bike",
+    off: "Charger is switched off",
+    unknown: "No state reported yet",
+    error: "Could not read the sensor from Home Assistant"
+  };
+  const demo = location.protocol === "file:" || new URLSearchParams(location.search).has("demo");
+  const base = demo ? "" : location.origin;
+
+  $("host").textContent = demo ? "demo mode · sample data" : location.host;
+
+  // ---- matrix ----
+  const leds = [];
+  for (let i = 0; i < 64; i++) {
+    const d = document.createElement("div");
+    d.className = "led";
+    d.dataset.c = "0";
+    $("matrix").appendChild(d);
+    leds.push(d);
+  }
+  function paintMatrix(rows) {
+    if (!Array.isArray(rows)) return;
+    rows.flat().forEach((c, i) => {
+      const led = leds[i];
+      if (!led || led.dataset.c === String(c)) return;
+      led.dataset.c = String(c);
+      if (!c) { led.style.background = ""; led.style.boxShadow = ""; return; }
+      const rgb = `rgb(${c >> 16 & 255},${c >> 8 & 255},${c & 255})`;
+      led.style.background = `radial-gradient(circle at 38% 35%, #fff 0, ${rgb} 38%, ${rgb} 100%)`;
+      led.style.boxShadow = `0 0 10px ${rgb}, 0 0 22px ${rgb}55`;
+    });
+  }
+
+  // ---- chargers ----
+  document.querySelectorAll(".seg").forEach((seg) => {
+    STATES.forEach((s) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = LABELS[s];
+      b.dataset.state = s;
+      b.setAttribute("aria-pressed", "false");
+      b.addEventListener("click", () => overrideState(seg.dataset.sensor, s));
+      seg.appendChild(b);
+    });
+  });
+  function paintBay(n, state) {
+    const bay = $("bay" + n);
+    state = state || "unknown";
+    bay.dataset.state = state;
+    bay.querySelector('[data-role="state"]').textContent = LABELS[state] || state;
+    bay.querySelector('[data-role="sub"]').textContent = SUBS[state] || "Custom state";
+    bay.querySelectorAll(".seg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.state === state)));
+  }
+
+  // ---- formatting ----
+  function duration(sec) {
+    if (typeof sec !== "number" || sec <= 0) return "-";
+    const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.floor(sec % 3600 / 60);
+    if (d) return `${d}<small>d</small> ${h}<small>h</small>`;
+    if (h) return `${h}<small>h</small> ${m}<small>m</small>`;
+    return `${m}<small>m</small> ${sec % 60}<small>s</small>`;
+  }
+  function setChip(id, ok) {
+    const c = $(id);
+    c.classList.toggle("ok", ok === true);
+    c.classList.toggle("bad", ok === false);
+  }
+
+  // ---- logs ----
+  let lastLogKey = "";
+  function paintLogs(lines) {
+    if (!Array.isArray(lines)) return;
+    const key = lines.join("\n");
+    if (key === lastLogKey) return;
+    lastLogKey = key;
+    const box = $("logs");
+    const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 30;
+    box.replaceChildren();
+    if (!lines.length) {
+      const e = document.createElement("div"); e.className = "empty"; e.textContent = "No log entries yet."; box.appendChild(e);
+    }
+    lines.slice().reverse().forEach((line) => {
+      const m = line.match(/^(\S+)\s+(INFO|WARNING|ERROR|DEBUG):\s?(.*)$/);
+      const row = document.createElement("div");
+      const parts = m ? [m[1], m[2], m[3]] : ["", "", line];
+      row.className = "row " + (parts[1] || "INFO");
+      ["t", "lv", "m"].forEach((cls, i) => {
+        const s = document.createElement("span"); s.className = cls; s.textContent = parts[i]; row.appendChild(s);
+      });
+      box.appendChild(row);
+    });
+    if (atBottom) box.scrollTop = box.scrollHeight;
+  }
+  document.querySelectorAll(".filters button").forEach((b) => b.addEventListener("click", () => {
+    document.querySelectorAll(".filters button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    $("logs").className = "console " + b.dataset.filter;
+  }));
+
+  // ---- brightness ----
+  const slider = $("brightness");
+  let dragging = false;
+  function paintSlider(v) {
+    slider.style.setProperty("--fill", (v / 255 * 100) + "%");
+    $("brightnessValue").textContent = v;
+  }
+  slider.addEventListener("pointerdown", () => dragging = true);
+  slider.addEventListener("input", () => { dragging = true; paintSlider(slider.value); });
+  slider.addEventListener("change", () => {
+    dragging = false;
+    call(`/config/display_brightness/${slider.value}`, `Brightness set to ${slider.value}`);
+  });
+
+  // ---- render status ----
+  let lastMessageAt = Date.now();
+  function render(d) {
+    lastMessageAt = Date.now();
+    document.body.classList.remove("stale");
+    setChip("chip-link", true);
+    setChip("chip-wifi", !!d.wifi_connected);
+    setChip("chip-hass", !!d.ws_connected);
+    $("current_time").textContent = d.current_time || "--:--:--";
+    $("ip_address").textContent = d.ip_address || "-";
+    $("uptime").innerHTML = duration(d.uptime);
+    $("wifi_uptime").innerHTML = duration(d.wifi_last_connect_attempt);
+    $("free_heap").innerHTML = typeof d.free_heap === "number" ? `${(d.free_heap / 1024).toFixed(0)}<small>KB</small>` : "-";
+    $("drops").textContent = d.wifi_disconnects ?? "-";
+    $("last_reason").textContent = d.wifi_disconnects ? (d.wifi_last_disconnect_reason || "-") : "none";
+    $("bssid").textContent = d.wifi_bssid || "-";
+    $("channel").textContent = d.wifi_channel || "-";
+    const rssi = d.wifi_connected && typeof d.wifi_rssi === "number" ? d.wifi_rssi : null;
+    $("rssi").innerHTML = rssi === null ? "-" : `${rssi}<small>dBm</small>`;
+    $("bars").dataset.level = rssi === null ? 0 : rssi >= -55 ? 4 : rssi >= -65 ? 3 : rssi >= -75 ? 2 : 1;
+    paintBay(1, d.sensor_1_state);
+    paintBay(2, d.sensor_2_state);
+    const s3 = $("sensor_3_state");
+    s3.textContent = d.sensor_3_state || "-";
+    s3.classList.toggle("on", /^(on|true)$/i.test(d.sensor_3_state || ""));
+    if (!dragging && typeof d.displayBrightness === "number") {
+      slider.value = d.displayBrightness;
+      paintSlider(d.displayBrightness);
+    }
+    paintMatrix(d.displayArray);
+    paintLogs(d.logBuffer);
+  }
+
+  // ---- actions ----
+  let toastTimer;
+  function toast(msg, isError) {
+    const t = $("toast");
+    t.textContent = msg;
+    t.classList.toggle("err", !!isError);
+    t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove("show"), 2600);
+  }
+  async function call(path, okMsg, opts) {
+    if (demo) { toast(okMsg + " (demo)"); return true; }
+    try {
+      const r = await fetch(base + path, opts);
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.message || r.statusText);
+      toast(okMsg);
+      return true;
+    } catch (e) {
+      toast("Failed: " + e.message, true);
+      return false;
+    }
+  }
+  function overrideState(sensor, state) {
+    paintBay(sensor, state);
+    call(`/config/update_state/${sensor}/${state}`, `Bay ${sensor} set to ${LABELS[state]}`);
+  }
+  $("beepBtn").addEventListener("click", () => call("/beep", "Beep!"));
+  $("restartBtn").addEventListener("click", () => {
+    if (confirm("Restart the display now?")) call("/boot", "Restarting...", { method: "POST" });
+  });
+
+  // ---- live connection ----
+  setInterval(() => {
+    if (Date.now() - lastMessageAt > 5000) {
+      document.body.classList.add("stale");
+      setChip("chip-link", false);
+    }
+  }, 1000);
+
+  if (demo) {
+    startDemo();
+    return;
+  }
+
+  let ws, poll;
+  function connect() {
+    ws = new WebSocket((location.protocol === "https:" ? "wss" : "ws") + "://" + location.hostname + ":81/");
+    ws.onopen = () => {
+      ws.send("status");
+      poll = setInterval(() => ws.readyState === WebSocket.OPEN && ws.send("status"), 1000);
+    };
+    ws.onmessage = (e) => {
+      try { render(JSON.parse(e.data)); } catch (err) { console.error("Bad status JSON", err); }
+    };
+    ws.onclose = () => {
+      clearInterval(poll);
+      setChip("chip-link", false);
+      setTimeout(connect, 2000);
+    };
+    ws.onerror = () => ws.close();
+  }
+  connect();
+
+  // ---- demo data (file:// or ?demo) ----
+  function startDemo() {
+    let tick = 0;
+    const C = { K: 0, C: 0x00ffff, M: 0xff00ff, B: 0x0000ff, Y: 0xffff00 };
+    function frame() {
+      const g = Array.from({ length: 8 }, () => Array(8).fill(0));
+      for (let r = 0; r < 8; r++) { g[r][0] = g[r][3] = C.C; g[r][4] = g[r][7] = C.M; }
+      [1, 2].forEach((c) => { g[0][c] = g[7][c] = C.C; });
+      [5, 6].forEach((c) => { g[0][c] = g[7][c] = C.M; });
+      const row = 1 + tick % 6;
+      g[row][1] = g[row][2] = C.B;
+      for (let r = 1; r < 7; r++) g[r][4 + ((r + row) % 2 === 0 ? 1 : 2)] = C.Y;
+      const p = tick % 28, x = p < 8 ? p : p < 15 ? 7 : p < 22 ? 21 - p : 0, y = p < 8 ? 0 : p < 15 ? p - 7 : p < 22 ? 7 : 28 - p;
+      const v = g[y][x], boost = (n) => Math.min(255, n + 206);
+      g[y][x] = boost(v >> 16 & 255) << 16 | boost(v >> 8 & 255) << 8 | boost(v & 255);
+      return g;
+    }
+    const logs = [
+      "08:14:02 INFO: HASS: sensor 1 -> charging",
+      "08:13:58 INFO: HASS: authenticated",
+      "08:13:57 INFO: HASS: connecting to 192.168.1.10:8123",
+      "08:13:55 INFO: WiFi: connected to 78:45:58:AA:BB:CC ch 6, RSSI -58 dBm, IP 192.168.1.50",
+      "08:13:51 WARNING: WiFi: disconnected after 5321s, reason 200 (BEACON_TIMEOUT)",
+      "06:45:10 INFO: HASS: door opened: binary_sensor.door_backyard_contact",
+      "+00:00:04 INFO: mDNS: http://charger.local",
+      "+00:00:01 INFO: Boot: reset reason power-on"
+    ];
+    function push() {
+      tick++;
+      render({
+        uptime: 98765 + tick, current_time: new Date().toTimeString().slice(0, 8), ip_address: "192.168.1.50",
+        wifi_connected: true, ws_connected: true, wifi_last_connect_attempt: 1520 + tick,
+        wifi_rssi: -58, wifi_bssid: "78:45:58:AA:BB:CC", wifi_channel: 6, wifi_disconnects: 1,
+        wifi_last_disconnect_reason: "BEACON_TIMEOUT", sensor_1_state: "charging", sensor_2_state: "disconnected",
+        sensor_3_state: "off", displayBrightness: 40, free_heap: 187340, logBuffer: logs, displayArray: frame()
+      });
+    }
+    push();
+    setInterval(push, 1000);
+  }
+})();
+</script>
+</body>
+</html>
 )rawliteral";

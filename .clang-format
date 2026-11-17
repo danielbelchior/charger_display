@@ -1,0 +1,26 @@
+# Formatting for firmware and host-test C++ (main/, tests/host/).
+# Run: clang-format -i main/*.cpp main/*.h main/*.ino tests/host/*.cpp tests/host/*.h
+# main/http_server_index.h is generated and excluded (see the guard in that file).
+BasedOnStyle: Google
+Language: Cpp
+Standard: c++17
+IndentWidth: 4
+ContinuationIndentWidth: 4
+ColumnLimit: 120
+AccessModifierOffset: -4
+IndentCaseLabels: true
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Never
+DerivePointerAlignment: false
+PointerAlignment: Left
+SpacesBeforeTrailingComments: 2
+IncludeBlocks: Preserve
+SortIncludes: Never
+AlignConsecutiveMacros: false
+AlignTrailingComments: true
+AlignAfterOpenBracket: Align
+BinPackArguments: true
+BinPackParameters: true

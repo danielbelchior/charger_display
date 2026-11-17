@@ -1,37 +1,17 @@
-#ifndef DISPLAY_H
-#define DISPLAY_H
+#pragma once
 
-#include "declarations.h"
+#include "config.h"
 
-// --- Function Prototypes ---
+enum Color : uint8_t { BLACK = 0, WHITE, RED, GREEN, BLUE, YELLOW, CYAN, MAGENTA };
 
-// Setup
-void setupDisplay();
+void displaySetup();
+void displaySetBrightness(uint8_t brightness);
+void displaySetOtaInProgress(bool inProgress);
 
-// Core Drawing
-void render_matrix();
-void drawMatrix();
-void clean_display();
+// Advance the animation by one frame and redraw.
+void displayTick();
+// Redraw the current state without advancing the animation.
+void displayRender();
 
-// Drawing Primitives & Animations
-void getNextBorderPoint();
-void updateItem(int row, int col, Color color);
-void drawBorder();
-void noWifi(int row);
-void noHass(int row);
-
-// State-specific Patterns
-void state_unknown(int bike, int row);
-void state_charging(int bike, int row);
-void state_disconnected(int bike, int row);
-
-// Color & Pixel Utilities
-int getPixelIndex(int row, int col);
-uint8_t highlightBrightness(uint8_t tone);
-uint32_t highlightPixel(int row, int col, uint32_t rgbColor);
-Color stringToColor(String colorName);
-void createArray8x8();
-uint32_t translateColor(Color colorValue);
-
-
-#endif // DISPLAY_H
+// 0xRRGGBB of a pixel as currently shown, including the moving highlight.
+uint32_t displayPixelColor(int row, int col);

@@ -1,286 +1,183 @@
-#include "http_server.h"
-#include "logging.h"
-#include "display.h"
+#include <ArduinoJson.h>
+#include <WebServer.h>
 #include <WebSocketsServer.h>
+#include <WiFi.h>
+#include <uri/UriBraces.h>
+
+#include "http_server.h"
+#include "app_state.h"
+#include "buzzer.h"
+#include "config.h"
+#include "display.h"
 #include "http_server_index.h"
+#include "logging.h"
+#include "validation.h"
+#include "wifi_manager.h"
 
-WebSocketsServer webSocket = WebSocketsServer(81); // WebSocket on port 81
+static WebServer http(HTTP_PORT);
+static WebSocketsServer statusSocket(STATUS_WS_PORT);
+static bool started = false;
+static bool restartRequested = false;
 
-void handleWebSocketEvents(uint8_t num, WStype_t type, uint8_t * payload, size_t length);
-
-bool isValidBrightness(const String& value) {
-    if (value.length() == 0) {
-        return false;
-    }
-
-    for (size_t i = 0; i < value.length(); i++) {
-        if (!isDigit(value[i])) {
-            return false;
-        }
-    }
-    return true;
+static void sendJson(int code, JsonDocument& doc) {
+    String body;
+    serializeJson(doc, body);
+    http.sendHeader("Access-Control-Allow-Origin", "*");
+    http.send(code, "application/json", body);
 }
 
-bool isValidSensorState(const String& state) {
-    if (state.length() == 0 || state.length() >= sizeof(sensor_1_state)) {
-        return false;
-    }
-
-    for (size_t i = 0; i < state.length(); i++) {
-        if (!isAlphaNumeric(state[i]) && state[i] != '_' && state[i] != '-') {
-            return false;
-        }
-    }
-    return true;
+static void sendError(int code, const char* message) {
+    JsonDocument doc;
+    doc["status"] = "error";
+    doc["message"] = message;
+    sendJson(code, doc);
 }
 
-void setupHttpServer() {
-    server.begin();
-    logInfo("HTTP server started on port 80");
-    webSocket.begin();
-    logInfo("WebSocket server started on port 81");
-    webSocket.onEvent(handleWebSocketEvents);
+static void handleIndex() {
+    http.send(200, "text/html", index_html);
 }
 
-void handleHttpRequests() {
-    WiFiClient client = server.available();
-    if (!client) {
+static void handleStatus() {
+    String body;
+    buildStatusJson(body);
+    http.sendHeader("Access-Control-Allow-Origin", "*");
+    http.send(200, "application/json", body);
+}
+
+static void handleBeep() {
+    logInfo("HTTP: beep");
+    playSound();
+    JsonDocument doc;
+    doc["status"] = "ok";
+    doc["action"] = "beep";
+    sendJson(200, doc);
+}
+
+static void handleBrightness() {
+    uint8_t brightness;
+    if (!parseBrightness(http.pathArg(0).c_str(), brightness)) {
+        sendError(400, "Brightness value must be between 0 and 255.");
         return;
     }
+    logInfo("HTTP: brightness %u -> %u", app.displayBrightness, brightness);
+    displaySetBrightness(brightness);
+    JsonDocument doc;
+    doc["status"] = "ok";
+    doc["variable"] = "displayBrightness";
+    doc["new_value"] = String(brightness);
+    sendJson(200, doc);
+}
 
-    // logInfo("New HTTP client.");
-    
-    // Wait for data to be available
-    unsigned long requestStartedAt = millis();
-    while(!client.available() && millis() - requestStartedAt < 200) {
-        delay(1);
-    }
-    if(!client.available()){
-        logWarning("HTTP client connected but sent no data.");
-        client.stop();
+static void handleUpdateState() {
+    size_t sensorId;
+    const String state = http.pathArg(1);
+    if (!parseSensorId(http.pathArg(0).c_str(), SENSOR_COUNT, sensorId)) {
+        sendError(400, "Malformed URL. Use /config/update_state/<id>/<value>");
         return;
     }
-
-    // Read the first line of the request
-    client.setTimeout(200);
-    String req = client.readStringUntil('\r');
-    client.flush(); // Clear the rest of the request from the buffer
-
-    // Match the request
-    if (req.indexOf("GET / ") != -1) {
-        client.println(F("HTTP/1.1 200 OK"));
-        client.println(F("Content-Type: text/html"));
-        client.println(F("Connection: close"));
-        client.println();
-        client.print(index_html);
-    } else if (req.indexOf("GET /status") != -1) {
-        // Send HTTP headers
-        client.println("HTTP/1.1 200 OK");
-        client.println("Content-Type: application/json");
-        client.println("Access-Control-Allow-Origin: *");
-        client.println("Connection: close");
-        client.println();
-
-        // Create JSON response
-        DynamicJsonDocument jsonDoc(4096);
-        jsonDoc["uptime"] = millis() / 1000;
-        jsonDoc["ip_address"] = WiFi.localIP().toString();
-        jsonDoc["wifi_connected"] = wifi_connected;
-        jsonDoc["ws_connected"] = ws_connected;
-        jsonDoc["sensor_1_state"] = sensor_1_state;
-        jsonDoc["sensor_2_state"] = sensor_2_state;
-        jsonDoc["displayBrightness"] = displayBrightness;
-        jsonDoc["should_render"] = should_render;
-        jsonDoc["free_heap"] = ESP.getFreeHeap();
-        jsonDoc["wifi_last_connect_attempt"] = wifi_connected ? (millis() - wifiLastConnectAttempt) / 1000 : 0;
-        jsonDoc["current_time"] = timeClient.getFormattedTime();
-
-        JsonArray logData = jsonDoc.createNestedArray("logBuffer");
-        for (int i = 0; i < LOG_BUFFER_SIZE; i++) {
-            if (logBuffer[i][0] != '\0') {
-                logData.add(logBuffer[i]);
-            }
-        }
-
-        JsonArray displayData = jsonDoc.createNestedArray("displayArray");
-        for (int i = 0; i < MATRIX_HEIGHT; i++) {
-            JsonArray row = displayData.createNestedArray();
-            for (int j = 0; j < MATRIX_WIDTH; j++) {
-                Color colorValue = (Color)displayArray[i][j];
-                uint32_t rgbColor = translateColor(colorValue);
-                rgbColor = highlightPixel(i, j, rgbColor);
-                row.add(rgbColor);
-            }
-        }
-
-        String response;
-        serializeJson(jsonDoc, response);
-        client.print(response);
-
-    } else if (req.indexOf("GET /beep") != -1) {
-        logInfo("HTTP GET /beep request received.");
-        playSound();
-        client.println("HTTP/1.1 200 OK");
-        client.println("Content-Type: application/json");
-        client.println("Access-Control-Allow-Origin: *");
-        client.println("Connection: close");
-        client.println();
-        client.print("{\"status\":\"ok\", \"action\":\"beep\"}");
-
-    } else if (req.indexOf("GET /config/display_brightness/") != -1) {
-    req.replace(" HTTP/1.1", "");
-    String valueStr = req.substring(req.lastIndexOf('/') + 1);
-        int spaceIndex = valueStr.indexOf(' ');
-        if (spaceIndex != -1) {
-            valueStr = valueStr.substring(0, spaceIndex);
-        }
-        logDebug(req.substring(0, 100));
-        logDebug(req.substring(req.lastIndexOf('/') + 1));
-        
-        int newBrightness = valueStr.toInt();
-        logInfo(String("HTTP GET /config/display_brightness/") + newBrightness + " request received.");
-        logInfo(String("Updating brightness from:") + displayBrightness + " to: " + newBrightness);
-
-        if (isValidBrightness(valueStr) && newBrightness <= 255) {
-            displayBrightness = newBrightness;
-            strip.setBrightness(displayBrightness);
-            logInfo("Display brightness set to: " + String(newBrightness));
-
-            client.println("HTTP/1.1 200 OK");
-            client.println("Content-Type: application/json");
-            client.println("Access-Control-Allow-Origin: *");
-            client.println("Connection: close");
-            client.println();
-            client.print("{\"status\":\"ok\", \"variable\":\"displayBrightness\", \"new_value\":\"" + String(newBrightness) + "\"}");
-        } else {
-            client.println("HTTP/1.1 400 Bad Request");
-            client.println("Content-Type: application/json");
-            client.println("Access-Control-Allow-Origin: *");
-            client.println("Connection: close");
-            client.println();
-            client.print("{\"status\":\"error\", \"message\":\"Brightness value must be between 0 and 255.\"}");
-        }
-
-    } else if (req.indexOf("GET /config/update_state/") != -1) {
-        req.replace(" HTTP/1.1", "");
-        int startIndex = req.indexOf("/update_state/");
-
-        String params = req.substring(startIndex + String("/update_state/").length());
-        int slashIndex = params.indexOf("/");
-
-        int sensorId = params.substring(0, slashIndex).toInt();
-        String sensorState = params.substring(slashIndex + 1);
-        logInfo(String("HTTP GET /config/update_state/") + sensorId + "/" + sensorState + " request received.");
-
-        if (!isValidSensorState(sensorState)) {
-            client.println("HTTP/1.1 400 Bad Request");
-            client.println("Content-Type: application/json");
-            client.println("Access-Control-Allow-Origin: *");
-            client.println("Connection: close");
-            client.println();
-            client.print("{\"status\":\"error\", \"message\":\"Sensor state must be 1 to 15 letters, numbers, underscores, or hyphens.\"}");
-        } else if (sensorId == 1) {
-            copySensorState(sensor_1_state, sensorState);
-            logInfo("Manually updated sensor 1 state to: " + sensorState);
-            client.println("HTTP/1.1 200 OK");
-            client.println("Content-Type: application/json");
-            client.println("Access-Control-Allow-Origin: *");
-            client.println("Connection: close");
-            client.println();
-            client.print("{\"status\":\"ok\", \"sensor_id\":1, \"new_state\":\"" + sensorState + "\"}");
-        } else if (sensorId == 2) {
-            copySensorState(sensor_2_state, sensorState);
-            logInfo("Manually updated sensor 2 state to: " + sensorState);
-            client.println("HTTP/1.1 200 OK");
-            client.println("Content-Type: application/json");
-            client.println("Access-Control-Allow-Origin: *");
-            client.println("Connection: close");
-            client.println();
-            client.print("{\"status\":\"ok\", \"sensor_id\":2, \"new_state\":\"" + sensorState + "\"}");
-        }  else {
-            logWarning("HTTP/1.1 400 Bad Request");
-            client.println("HTTP/1.1 400 Bad Request");
-            client.println("Content-Type: application/json");
-            client.println("Access-Control-Allow-Origin: *");
-            client.println("Connection: close");
-            client.println();
-            client.print("{\"status\":\"error\", \"message\":\"Malformed URL. Use /config/updatestate/<id>/<value>\"}");
-        }
-    } else if (req.indexOf("POST /boot") != -1 || req.indexOf("GET /boot") != -1) {
-            logInfo("HTTP /boot request received. Rebooting system.");
-            client.println("HTTP/1.1 200 OK");
-            client.println("Content-Type: application/json");
-            client.println("Access-Control-Allow-Origin: *");
-            client.println("Connection: close");
-            client.println();
-            client.print("{\"status\":\"ok\", \"action\":\"boot\"}");
-            delay(100);
-            ESP.restart();
-    } else {
-        logWarning("HTTP/1.1 404 Not Found");
-        // Send 404 Not Found
-        client.println("HTTP/1.1 404 Not Found");
-        client.println("Content-Type: text/html");
-        client.println("Access-Control-Allow-Origin: *");
-        client.println("Connection: close");
-        client.println();
-        client.println("<!DOCTYPE html><html><head><title>Not Found</title></head><body><h1>404 Not Found</h1></body></html>");
+    if (!isValidSensorState(state.c_str(), SENSOR_STATE_LEN)) {
+        sendError(400, "Sensor state must be 1 to 15 letters, numbers, underscores, or hyphens.");
+        return;
     }
-
-    delay(1); // Give the client time to receive the data
-    client.stop();
-    // logInfo("HTTP client disconnected.");
+    setSensorState(sensorId - 1, state.c_str());
+    logInfo("HTTP: sensor %u manually set to %s", (unsigned)sensorId, state.c_str());
+    displayRender();
+    JsonDocument doc;
+    doc["status"] = "ok";
+    doc["sensor_id"] = (unsigned)sensorId;
+    doc["new_state"] = state;
+    sendJson(200, doc);
 }
 
-void handleWebSocketStatus(uint8_t num) {
-    DynamicJsonDocument jsonDoc(4096);
-    jsonDoc["uptime"] = millis() / 1000;
-    jsonDoc["ip_address"] = WiFi.localIP().toString();
-    jsonDoc["wifi_connected"] = wifi_connected;
-    jsonDoc["ws_connected"] = ws_connected;
-    jsonDoc["sensor_1_state"] = sensor_1_state;
-    jsonDoc["sensor_2_state"] = sensor_2_state;
-    jsonDoc["displayBrightness"] = displayBrightness;
-    jsonDoc["should_render"] = should_render;
-    jsonDoc["free_heap"] = ESP.getFreeHeap();
-    jsonDoc["wifi_last_connect_attempt"] = wifi_connected ? (millis() - wifiLastConnectAttempt) / 1000 : 0;
-    jsonDoc["current_time"] = timeClient.getFormattedTime();
-
-    JsonArray logData = jsonDoc.createNestedArray("logBuffer");
-    for (int i = 0; i < LOG_BUFFER_SIZE; i++) {
-        if (logBuffer[i][0] != '\0') {
-            logData.add(logBuffer[i]);
-        }
-    }
-
-    JsonArray displayData = jsonDoc.createNestedArray("displayArray");
-    for (int i = 0; i < MATRIX_HEIGHT; i++) {
-        JsonArray row = displayData.createNestedArray();
-        for (int j = 0; j < MATRIX_WIDTH; j++) {
-            Color colorValue = (Color)displayArray[i][j];
-            uint32_t rgbColor = translateColor(colorValue);
-            rgbColor = highlightPixel(i, j, rgbColor);
-            row.add(rgbColor);
-        }
-    }
-
-    String response;
-    serializeJson(jsonDoc, response);
-    webSocket.sendTXT(num, response);
+static void handleBoot() {
+    JsonDocument doc;
+    doc["status"] = "ok";
+    doc["action"] = "boot";
+    sendJson(200, doc);
+    // Restart from httpServerLoop() so the server can finish this response first.
+    restartRequested = true;
 }
 
-void handleWebSocketEvents(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
-    switch(type) {
-        case WStype_TEXT:
-            if (length > 0 && strncmp((char*)payload, "status", 6) == 0) {
-                handleWebSocketStatus(num);
-            }
-            break;
-        default:
-            break;
+static void handleNotFound() {
+    logWarning("HTTP: 404 %s", http.uri().c_str());
+    sendError(404, "Not found");
+}
+
+static void onStatusSocketEvent(uint8_t client, WStype_t type, uint8_t* payload, size_t length) {
+    if (type == WStype_TEXT && length >= 6 && strncmp(reinterpret_cast<char*>(payload), "status", 6) == 0) {
+        String body;
+        buildStatusJson(body);
+        statusSocket.sendTXT(client, body);
     }
 }
 
-void handleWebSocket() {
-    webSocket.loop();
+void httpServerSetup() {
+    if (started) {
+        return;
+    }
+    started = true;
+
+    http.on("/", HTTP_GET, handleIndex);
+    http.on("/status", HTTP_GET, handleStatus);
+    http.on("/beep", HTTP_GET, handleBeep);
+    http.on("/boot", handleBoot);
+    http.on(UriBraces("/config/display_brightness/{}"), HTTP_GET, handleBrightness);
+    http.on(UriBraces("/config/update_state/{}/{}"), HTTP_GET, handleUpdateState);
+    http.onNotFound(handleNotFound);
+    http.begin();
+    logInfo("HTTP server on port %u", HTTP_PORT);
+
+    statusSocket.begin();
+    statusSocket.onEvent(onStatusSocketEvent);
+    logInfo("Status WebSocket on port %u", STATUS_WS_PORT);
+}
+
+void httpServerLoop() {
+    if (!started) {
+        return;
+    }
+    http.handleClient();
+    statusSocket.loop();
+    if (restartRequested) {
+        restartDevice("requested via HTTP /boot");
+    }
+}
+
+void buildStatusJson(String& out) {
+    char clock[16];
+    formatClock(clock, sizeof(clock));
+
+    JsonDocument doc;
+    doc["uptime"] = millis() / 1000;
+    doc["current_time"] = clock;
+    doc["ip_address"] = WiFi.localIP().toString();
+    doc["wifi_connected"] = app.wifiConnected;
+    doc["ws_connected"] = app.hassConnected;
+    // Seconds since the current WiFi session started (name kept for the UI).
+    doc["wifi_last_connect_attempt"] = wifiConnectedForMs() / 1000;
+    doc["wifi_rssi"] = app.wifiConnected ? WiFi.RSSI() : 0;
+    doc["wifi_bssid"] = app.wifiConnected ? WiFi.BSSIDstr() : String("");
+    doc["wifi_channel"] = app.wifiConnected ? WiFi.channel() : 0;
+    doc["wifi_disconnects"] = wifiDisconnectCount();
+    doc["wifi_last_disconnect_reason"] = wifiLastDisconnectReason();
+    doc["sensor_1_state"] = app.sensorState[0];
+    doc["sensor_2_state"] = app.sensorState[1];
+    doc["sensor_3_state"] = app.sensorState[2];
+    doc["displayBrightness"] = app.displayBrightness;
+    doc["free_heap"] = ESP.getFreeHeap();
+
+    JsonArray logs = doc["logBuffer"].to<JsonArray>();
+    for (size_t i = 0; i < logCount(); i++) {
+        logs.add(logEntry(i));
+    }
+
+    JsonArray matrix = doc["displayArray"].to<JsonArray>();
+    for (int row = 0; row < MATRIX_HEIGHT; row++) {
+        JsonArray cells = matrix.add<JsonArray>();
+        for (int col = 0; col < MATRIX_WIDTH; col++) {
+            cells.add(displayPixelColor(row, col));
+        }
+    }
+
+    serializeJson(doc, out);
 }

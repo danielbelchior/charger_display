@@ -1,87 +1,62 @@
 # Charger Display
 
-This project is a custom-built, WiFi-enabled status display for monitoring two e-bike chargers integrated with Home Assistant. It uses an ESP32 and an 8x8 RGB LED matrix to provide real-time visual feedback.
+A WiFi status display for two e-bike chargers tracked in Home Assistant. An ESP32 drives an 8x8 RGB LED matrix: the left half shows charger 1 and the right half shows charger 2. A buzzer beeps on state changes and door events.
 
+![WebUI](webui-demo.png)
 
 ## Hardware
 
-*   **Microcontroller:** ESP32-WROOM-32
-*   **Display:** 8x8 WS2812B (NeoPixel) RGB LED matrix
-*   **Audio:** Active buzzer module for notifications
+| Part | Notes |
+| --- | --- |
+| ESP32-WROOM-32 dev board | FQBN `esp32:esp32:esp32` |
+| 8x8 WS2812B matrix | Data on GPIO 23, wired row by row (not serpentine) |
+| Active buzzer module | GPIO 13, active-low |
 
-## Features
+Pins are set in `main/config.h`.
 
-*   **Real-time Status Display:** Connects to Home Assistant via WebSocket to get instant updates for two charger sensors.
-*   **Visual States:** The 8x8 matrix displays different patterns and colors for various states:
-    *   Charging
-    *   Disconnected
-    *   State Unknown
-    *   No WiFi Connection
-    *   No Home Assistant Connection
-*   **Web Interface:** A built-in web UI allows for easy monitoring and control from any device on the network.
-![WebUI](webui-demo.png)
+## What the matrix shows
 
-*   **REST API:** Provides endpoints for status checks, configuration, and system control.
-*   **mDNS Service:** Easily access the device using the friendly URL `http://charger.local`.
-*   **NTP Time Sync:** Logs are accurately timestamped using time from an NTP server.
-*   **Audible Alerts:** An active buzzer provides sounds for state changes and system events.
-*   **Over-the-Air (OTA) Updates:** Supports firmware updates over the WiFi network (currently disabled in the main code).
+| Pattern | Meaning |
+| --- | --- |
+| Cyan (left) and magenta (right) frames, blue bar moving down | Charger is `charging` |
+| Yellow zig-zag inside the frame | Charger is `disconnected` |
+| Red blinking dots inside the frame | Charger state `unknown` |
+| Red staircase, blue/red blinking corner | No WiFi |
+| Blue staircase, green/yellow blinking corner | WiFi up, Home Assistant not connected |
+| Yellow checkerboard | OTA update in progress (only if OTA is enabled) |
 
-## Installation
+A single bright pixel moves one step around the border every second, so you can tell the firmware is alive.
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/user/charger_display.git
-    cd charger_display
-    ```
+## Quick start
 
-2.  **Configure Secrets:**
-    Rename `secrets_template.h` to `secrets.h` and fill in your details:
-    *   WiFi SSID and password.
-    *   Home Assistant host, port, and long-lived access token.
-    *   The `entity_id`s for your two charger sensors in Home Assistant.
+1. Copy `main/secrets_template.h` to `main/secrets.h` and fill in your WiFi details, Home Assistant host, token, and the three sensor entity IDs.
+2. Install [PlatformIO](https://platformio.org), connect the board over USB, then build and flash (details in [docs/platformio.md](docs/platformio.md)):
+   ```sh
+   pio run -t upload -t monitor
+   ```
+3. Optional: set `ENABLE_OTA 1` and `OTA_PASSWORD` in `secrets.h` before that first flash. Later updates then go over WiFi with `pio run -e ota -t upload`.
+4. Open `http://charger.local`. The hostname is configurable. The dashboard shows the live matrix, both chargers with manual overrides, WiFi and Home Assistant health, brightness, and the event log.
 
-3.  **Install Dependencies:**
-    This project requires the following Arduino libraries. You can install them using the Arduino IDE's Library Manager:
-    *   `Adafruit NeoPixel`
-    *   `ArduinoWebsockets`
-    *   `ArduinoJson`
-    *   `NTPClient`
+PlatformIO installs the ESP32 core (Arduino-ESP32 3.2.0) and the libraries: `ArduinoJson` (7.x), `Adafruit NeoPixel`, `WebSockets` (Markus Sattler), `ArduinoWebsockets` (Gil Maimon). The sketch also opens in the Arduino IDE; see the last section of the PlatformIO guide.
 
-4.  **Compile and Upload:**
-    *   Open the `main/main.ino` file in the Arduino IDE or your preferred editor (like VS Code with PlatformIO).
-    *   Select your ESP32 board from the board manager.
-    *   Select the correct COM port.
-    *   Click "Upload" to flash the firmware to the device.
+## Documentation
 
-## Web Interface
+- [docs/architecture.md](docs/architecture.md) covers the module layout, the main loop, and connection handling.
+- [docs/api.md](docs/api.md) covers the REST API and the status WebSocket.
+- [docs/wifi-troubleshooting.md](docs/wifi-troubleshooting.md) covers WiFi drops, Ubiquiti/UniFi settings, and how to read disconnect reasons.
+- [docs/platformio.md](docs/platformio.md) covers compiling, USB flashing, and OTA updates with PlatformIO.
+- [docs/development.md](docs/development.md) covers host tests, formatting, the web UI pipeline, and CI.
+- [CONTEXT.md](CONTEXT.md) is the glossary, [docs/adr/](docs/adr/) records design decisions, and [CONTRIBUTING.md](CONTRIBUTING.md) explains how to contribute. Agents read [AGENTS.md](AGENTS.md).
 
-The device hosts a comprehensive web interface accessible at **`http://charger.local`**.
+## Repository layout
 
-The UI provides:
-*   A live view of the 8x8 LED matrix display.
-*   System status including uptime, IP address, and connection status.
-*   Live logs from the device.
-*   Controls to manually set sensor states and adjust display brightness.
-
-![WebUI](webui-demo.png)
-
-## REST API
-
-The device offers a simple REST API for integration and control.
-
-*   **`GET /status`**
-    Returns a JSON object with detailed system status, including uptime, sensor states, logs, and a representation of the current display matrix.
-
-*   **`GET /boot` or `POST /boot`**
-    Reboots the ESP32 module.
-
-*   **`GET /config/display_brightness/${val}`**
-    Sets the display brightness. `${val}` should be an integer between 0 and 255.
-    *Example:* `http://charger.local/config/display_brightness/50`
-
-*   **`GET /config/update_state/${bike_id}/${val}`**
-    Manually overrides the state of a charger sensor.
-    *   `${bike_id}`: `1` or `2`
-    *   `${val}`: A string like `charging`, `disconnected`, or `unknown`.
-    *Example:* `http://charger.local/config/update_state/1/charging`
+```
+main/            Firmware (Arduino sketch, one module per .h/.cpp pair)
+control-panel/   Source of the web UI, compiled into main/http_server_index.h
+tests/host/      Unit tests for the Arduino-free logic (scripts/test.sh)
+scripts/         test.sh, format.sh, and the OTA password helper for PlatformIO
+platformio.ini   Build definition (board, core, partitions, libraries, usb/ota)
+docs/            Architecture, API, PlatformIO, WiFi troubleshooting, ADRs
+http-server/     Optional development tool: UDP log receiver with a web tail
+.githooks/       pre-commit hook that regenerates the web UI header
+```

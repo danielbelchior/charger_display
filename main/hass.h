@@ -1,19 +1,10 @@
-#ifndef HASS_H
-#define HASS_H
+#pragma once
 
-#include "declarations.h"
+// Home Assistant link: WebSocket subscription for live updates, REST for the
+// initial state after each (re)connect.
 
-// --- Function Prototypes ---
-
-// Setup
-void setupHass();
-
-// Core Loop
-void loopHass();
-
-// Functions
-String getEntityState(String entityId);
-void onMessage(WebsocketsMessage message);
-void onEvent(WebsocketsEvent event, String data);
-
-#endif // HASS_H
+// Drive the connection. Call every loop iteration; idles while WiFi is down.
+void hassLoop();
+bool hassIsConnected();
+// Milliseconds since the link was last ready (0 while connected).
+uint32_t hassDisconnectedForMs();

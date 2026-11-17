@@ -1,47 +1,70 @@
+#include "ota.h"
+#include "config.h"
+
+#if ENABLE_OTA
+
 #include <ArduinoOTA.h>
-#include "logging.h"
-#include "util.h"
-#include "declarations.h"
+
+#include "buzzer.h"
 #include "display.h"
+#include "logging.h"
 
-void setupOTA(const char* hostname) {
-    ArduinoOTA.setHostname(hostname);
+static bool started = false;
+static bool inProgress = false;
+static unsigned lastReportedDecile = 0;
+
+void otaSetup() {
+    if (started) {
+        return;
+    }
+    started = true;
+
+    ArduinoOTA.setHostname(DEVICE_HOSTNAME);
+#ifdef OTA_PASSWORD
+    ArduinoOTA.setPassword(OTA_PASSWORD);
+#endif
     ArduinoOTA.onStart([]() {
-        String type;
-        if (ArduinoOTA.getCommand() == U_FLASH)
-            type = "sketch";
-        else // U_SPIFFS
-            type = "filesystem";
-
-        ota_in_progress = true;
-        render_matrix();
-        logInfo("Start updating " + type);
+        inProgress = true;
+        lastReportedDecile = 0;
+        displaySetOtaInProgress(true);
+        logInfo("OTA: start (%s)", ArduinoOTA.getCommand() == U_FLASH ? "sketch" : "filesystem");
         playSound(3, 100, 100);
     });
     ArduinoOTA.onEnd([]() {
-        ota_in_progress = false;
+        inProgress = false;
+        logInfo("OTA: done");
         playSound(5, 100, 100);
-        logInfo("End");
     });
     ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-        logInfo("Progress: " + String((progress / (total / 100))) + "%");
-        if ( (progress / (total / 100)) % 10 ==0 ){
+        const unsigned decile = total ? (progress * 10U) / total : 0;
+        if (decile > lastReportedDecile) {
+            lastReportedDecile = decile;
+            logInfo("OTA: %u%%", decile * 10);
             playSound(1, 100, 100);
         }
     });
     ArduinoOTA.onError([](ota_error_t error) {
-        ota_in_progress = false;
+        inProgress = false;
+        displaySetOtaInProgress(false);
+        logError("OTA: error %u", (unsigned)error);
         playSound(1, 300, 300);
-        logError("Error[" + String(error) + "]: ");
-        if (error == OTA_AUTH_ERROR) logError("Auth Failed");
-        else if (error == OTA_BEGIN_ERROR) logError("Begin Failed");
-        else if (error == OTA_CONNECT_ERROR) logError("Connect Failed");
-        else if (error == OTA_RECEIVE_ERROR) logError("Receive Failed");
-        else if (error == OTA_END_ERROR) logError("End Failed");
     });
     ArduinoOTA.begin();
+    logInfo("OTA: ready");
 }
 
-void handleOTA() {
-    ArduinoOTA.handle();
+bool otaLoop() {
+    if (started) {
+        ArduinoOTA.handle();
+    }
+    return inProgress;
 }
+
+#else
+
+void otaSetup() {}
+bool otaLoop() {
+    return false;
+}
+
+#endif

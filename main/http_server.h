@@ -1,10 +1,12 @@
-#ifndef HTTP_SERVER_H
-#define HTTP_SERVER_H
+#pragma once
 
-#include "declarations.h"
+#include <Arduino.h>
 
-void setupHttpServer();
-void handleHttpRequests();
-void handleWebSocket();
+// Web UI and REST API on HTTP_PORT, live status push on STATUS_WS_PORT.
 
-#endif // HTTP_SERVER_H
+// Start the servers. Safe to call repeatedly; only the first call has effect.
+void httpServerSetup();
+void httpServerLoop();
+
+// Status document shared by GET /status and the status WebSocket.
+void buildStatusJson(String& out);

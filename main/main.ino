@@ -1,237 +1,121 @@
-#include "declarations.h"
-#include "logging.h"
+// Charger Display firmware: shows two Home Assistant charger states on an
+// 8x8 WS2812B matrix. See docs/architecture.md for the module layout.
+
+#include <ESPmDNS.h>
+#include <esp_system.h>
+
+#include "config.h"
+#include "app_state.h"
+#include "buzzer.h"
 #include "display.h"
 #include "hass.h"
 #include "http_server.h"
-#include <ESPmDNS.h>
-// OTA
-// #include "ota.h"
-// Utility
-#include "util.h"
-#include <WiFiUdp.h>
-#include <NTPClient.h>
+#include "logging.h"
+#include "ota.h"
+#include "wifi_manager.h"
 
-// --- Global Variable Definitions ---
-// The 'extern' declarations in declarations.h tell other files that these variables exist.
-// Here is where they are actually created and memory is allocated for them.
+static uint32_t lastFrameAt = 0;
+static bool networkServicesStarted = false;
 
-// NeoPixel
-Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
-uint8_t displayBrightness = 20;
-uint8_t displayArray[MATRIX_HEIGHT][MATRIX_WIDTH];
-
-// Home Assistant
-WebsocketsClient client;
-int hass_message_id = 1;
-char sensor_1_state[16] = "unknown";
-char sensor_2_state[16] = "unknown";
-char sensor_3_state[16] = "unknown";
-bool ws_connected = false;
-bool refreshHassStates = false;
-
-// WiFi
-WiFiServer server(HTTP_PORT);
-WiFiUDP udp;
-bool wifi_connected = false;
-unsigned long wifiLastConnectAttempt = 0;
-
-// State & Timing
-int chargingRow = 1;
-int highlightIndex = 0;
-int highlightX = 0;
-int highlightY = 0;
-bool should_render = true;
-unsigned long lastUpdate = 0;
-const unsigned long interval = 1000; // 1 second
-
-// Connection retry timing
-const unsigned long WIFI_RETRY_INITIAL_DELAY = 5000;
-const unsigned long WIFI_RETRY_MAX_DELAY = 60000;
-const unsigned long HASS_RETRY_DELAY = 10000;
-const unsigned long CONNECTION_FAILURE_RESTART_DELAY = 30000;
-unsigned long nextWifiRetryAt = 0;
-unsigned long wifiRetryDelay = WIFI_RETRY_INITIAL_DELAY;
-unsigned long nextHassRetryAt = 0;
-unsigned long connectionFailureStartedAt = 0;
-bool httpServerStarted = false;
-
-// Logging
-char logBuffer[LOG_BUFFER_SIZE][100] = {0};
-//bool ota_in_progress = false;
-
-// NTP
-NTPClient timeClient(udp, NTP_SERVER, 0, 3600000); // UTC, update every 1h
-
-
-// --- WiFi and Utility Functions ---
-
-void connectToWifi() {
-    logInfo("Connecting to WiFi...");
-    logInfo("SSID: " + String(WIFI_SSID));
-
-    WiFi.setHostname("charger");
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-    nextWifiRetryAt = millis() + wifiRetryDelay;
-    wifiRetryDelay = min(wifiRetryDelay * 2, WIFI_RETRY_MAX_DELAY);
+static const char* resetReasonName(esp_reset_reason_t reason) {
+    switch (reason) {
+        case ESP_RST_POWERON:
+            return "power-on";
+        case ESP_RST_SW:
+            return "software";
+        case ESP_RST_PANIC:
+            return "panic";
+        case ESP_RST_INT_WDT:
+            return "interrupt watchdog";
+        case ESP_RST_TASK_WDT:
+            return "task watchdog";
+        case ESP_RST_WDT:
+            return "watchdog";
+        case ESP_RST_BROWNOUT:
+            return "brownout";
+        case ESP_RST_DEEPSLEEP:
+            return "deep sleep";
+        default:
+            return "other";
+    }
 }
 
-void copySensorState(char* destination, const String& state) {
-    state.toCharArray(destination, 16);
-}
+static void startNetworkServices() {
+    configTzTime(TIMEZONE, NTP_SERVER);
 
-void handleWifiConnected() {
-    wifi_connected = true;
-    wifiLastConnectAttempt = millis();
-    wifiRetryDelay = WIFI_RETRY_INITIAL_DELAY;
-    logInfo("WiFi connected!");
-    logInfo("IP address: " + WiFi.localIP().toString());
-    timeClient.update();
-
-    if (!MDNS.begin("charger")) {
-        logError("Error starting mDNS");
+    if (MDNS.begin(DEVICE_HOSTNAME)) {
+        MDNS.addService("http", "tcp", HTTP_PORT);
+        logInfo("mDNS: http://%s.local", DEVICE_HOSTNAME);
     } else {
-        logInfo("mDNS responder started: charger.local");
+        logError("mDNS: failed to start");
     }
 
-    logInfo("Loading initial state of sensors");
-    getEntitiesState();
-
-    logInfo("Websocket connecting");
-    setupHass();
-    nextHassRetryAt = millis() + HASS_RETRY_DELAY;
-
-    if (!httpServerStarted) {
-        setupHttpServer();
-        httpServerStarted = true;
-    }
-
-    render_matrix();
+    httpServerSetup();
+    otaSetup();
+    networkServicesStarted = true;
 }
 
-void handleWifiConnection() {
-    if (WiFi.status() == WL_CONNECTED) {
-        if (!wifi_connected) {
-            handleWifiConnected();
-        }
-        return;
+static void onWifiConnected() {
+    app.wifiConnected = true;
+    if (!networkServicesStarted) {
+        startNetworkServices();
     }
-
-    if (wifi_connected) {
-        wifi_connected = false;
-        ws_connected = false;
-        strcpy(sensor_1_state, "unknown");
-        strcpy(sensor_2_state, "unknown");
-        strcpy(sensor_3_state, "unknown");
-        logWarning("WiFi disconnected.");
-        render_matrix();
-    }
-
-    if ((long)(millis() - nextWifiRetryAt) >= 0) {
-        logWarning("WiFi reconnect attempt.");
-        connectToWifi();
-    }
+    displayRender();
 }
 
-void handleConnectionWatchdog() {
-    if (wifi_connected && ws_connected) {
-        connectionFailureStartedAt = 0;
-        return;
-    }
-
-    unsigned long now = millis();
-    if (connectionFailureStartedAt == 0) {
-        connectionFailureStartedAt = now;
-        logWarning("WiFi or Home Assistant disconnected. Restarting in 30 seconds if not restored.");
-        return;
-    }
-
-    if (now - connectionFailureStartedAt >= CONNECTION_FAILURE_RESTART_DELAY) {
-        logError("WiFi or Home Assistant unavailable for 30 seconds. Restarting firmware.");
-        delay(100);
-        ESP.restart();
-    }
+static void onWifiDisconnected() {
+    app.wifiConnected = false;
+    resetSensorStates();
+    displayRender();
 }
 
-
-
-// --- Main Functions ---
+static void superviseHomeAssistant() {
+    if (app.wifiConnected && hassDisconnectedForMs() >= HASS_RESTART_AFTER_MS) {
+        restartDevice("Home Assistant unreachable for 10 minutes");
+    }
+}
 
 void setup() {
     Serial.begin(115200);
-    // setupOTA("charger");
-
-    // Initialize buzzer pin
-    pinMode(BUZZER_PIN, OUTPUT);
-    digitalWrite(BUZZER_PIN, HIGH); // Keep buzzer OFF
-
-    // Play buzzer sound
+    buzzerSetup();
     playSound(2, 20, 50);
 
+    displaySetup();
+    displayRender();
 
-    setupDisplay();
-    render_matrix(); // Initial render
+    logInfo("Boot: reset reason %s", resetReasonName(esp_reset_reason()));
+    if (const char* reason = previousRestartReason()) {
+        logInfo("Boot: previous restart requested because: %s", reason);
+    }
 
-    connectToWifi();
+    wifiSetup();
     playSound(3, 20, 50);
-
-    // NTP setup
-    timeClient.begin();
     playSound(1, 50, 400);
 }
 
-void getEntitiesState() {
-    copySensorState(sensor_1_state, getEntityState(SENSOR_1_ENTITY_ID));
-    copySensorState(sensor_2_state, getEntityState(SENSOR_2_ENTITY_ID));
-    copySensorState(sensor_3_state, getEntityState(SENSOR_3_ENTITY_ID));
-    logInfo("Sensor 1 state: " + String(sensor_1_state));
-    logInfo("Sensor 2 state: " + String(sensor_2_state));
-    logInfo("Sensor 3 state: " + String(sensor_3_state));
-}
-
 void loop() {
-
-    // OTA DISABLED
-    // Handle OTA updates
-    // handleOTA();
-    // if (ota_in_progress){
-    //     return;
-    // }
-
-
-    handleHttpRequests();
-    handleWebSocket();
-
-    // --- Connection Management ---
-    handleWifiConnection();
-
-    if (wifi_connected) {
-        if (!ws_connected) {
-            if ((long)(millis() - nextHassRetryAt) >= 0) {
-                logWarning("Websocket disconnected, trying to reconnect...");
-                setupHass();
-                nextHassRetryAt = millis() + HASS_RETRY_DELAY;
-            }
-        }
-        loopHass(); // Process WebSocket messages
-        if (refreshHassStates) {
-            refreshHassStates = false;
-            getEntitiesState();
-        }
+    if (otaLoop()) {
+        return;
     }
-    handleConnectionWatchdog();
 
-    // --- Timed Display Update ---
-    unsigned long now = millis();
-    if (now - lastUpdate >= interval) {
-        lastUpdate = now;
+    switch (wifiLoop()) {
+        case WifiChange::Connected:
+            onWifiConnected();
+            break;
+        case WifiChange::Disconnected:
+            onWifiDisconnected();
+            break;
+        case WifiChange::None:
+            break;
+    }
 
-        chargingRow++;
-        if (chargingRow > 6) chargingRow = 1;
+    hassLoop();
+    httpServerLoop();
+    superviseHomeAssistant();
 
-        getNextBorderPoint();
-
-        if (should_render) {
-            render_matrix();
-        }
+    const uint32_t now = millis();
+    if (now - lastFrameAt >= DISPLAY_FRAME_MS) {
+        lastFrameAt = now;
+        displayTick();
     }
 }

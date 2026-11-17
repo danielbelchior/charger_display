@@ -1,239 +1,211 @@
-#include "display.h"
-#include "logging.h"
-#include "declarations.h"
+#include <Adafruit_NeoPixel.h>
 
-// This function will be called from the main setup()
-void setupDisplay() {
-    strip.begin();
-    strip.setBrightness(displayBrightness);
-    strip.show(); // Initialize all pixels to 'off'
+#include "display.h"
+#include "app_state.h"
+
+static Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
+static uint8_t frame[MATRIX_HEIGHT][MATRIX_WIDTH];
+
+// Animation phase, cycles 1..6 (the inner rows of the matrix).
+static int animationRow = 1;
+// A single brighter pixel walks clockwise around the border once per 28 frames.
+static int highlightIndex = 0;
+static int highlightX = 0;
+static int highlightY = 0;
+static bool otaInProgress = false;
+
+static constexpr uint8_t HIGHLIGHT_BOOST = 206;
+
+static void clearFrame() {
+    memset(frame, BLACK, sizeof(frame));
 }
 
-void createArray8x8() {
-    for (int i = 0; i < MATRIX_HEIGHT; i++) {
-        for (int j = 0; j < MATRIX_WIDTH; j++) {
-            displayArray[i][j] = BLACK;
-        }
+static void setPixel(int row, int col, Color color) {
+    if (row >= 0 && row < MATRIX_HEIGHT && col >= 0 && col < MATRIX_WIDTH) {
+        frame[row][col] = color;
     }
 }
 
-void getNextBorderPoint() {
-    const int SIZE = 8;
-    const int BORDER_POINTS = (SIZE * 4) - 4;
-    int i = highlightIndex;
+static void advanceHighlight() {
+    const int size = MATRIX_WIDTH;
+    const int borderPoints = (size * 4) - 4;
+    const int i = highlightIndex;
 
-    if (i < SIZE) {
+    if (i < size) {
         highlightX = i;
         highlightY = 0;
-    } else if (i < SIZE + SIZE - 1) {
-        highlightX = SIZE - 1;
-        highlightY = i - (SIZE - 1);
-    } else if (i < SIZE + SIZE - 1 + SIZE - 1) {
-        highlightX = (SIZE - 1) - (i - (2 * SIZE - 2));
-        highlightY = SIZE - 1;
+    } else if (i < 2 * size - 1) {
+        highlightX = size - 1;
+        highlightY = i - (size - 1);
+    } else if (i < 3 * size - 2) {
+        highlightX = (size - 1) - (i - (2 * size - 2));
+        highlightY = size - 1;
     } else {
         highlightX = 0;
-        highlightY = (SIZE - 1) - (i - (3 * SIZE - 3));
+        highlightY = (size - 1) - (i - (3 * size - 3));
     }
 
-    highlightIndex = (highlightIndex + 1) % BORDER_POINTS;
+    highlightIndex = (highlightIndex + 1) % borderPoints;
 }
 
-void updateItem(int row, int col, Color color) {
-    if (row >= 0 && row < MATRIX_HEIGHT && col >= 0 && col < MATRIX_WIDTH) {
-        displayArray[row][col] = color;
+// Charger 1 uses columns 0-3, charger 2 uses columns 4-7.
+static int chargerColumn(int charger) {
+    return charger == 1 ? 0 : 4;
+}
+
+static void drawBorder() {
+    for (int col : {1, 2}) {
+        setPixel(0, col, CYAN);
+        setPixel(7, col, CYAN);
     }
-}
-
-void drawBorder() {
-    updateItem(0, 1, CYAN);
-    updateItem(0, 2, CYAN);
-    updateItem(7, 1, CYAN);
-    updateItem(7, 2, CYAN);
-    updateItem(0, 5, MAGENTA);
-    updateItem(0, 6, MAGENTA);
-    updateItem(7, 5, MAGENTA);
-    updateItem(7, 6, MAGENTA);
-
-    for (int i = 0; i < 8; i++) {
-        updateItem(i, 0, CYAN);
-        updateItem(i, 3, CYAN);
-        updateItem(i, 4, MAGENTA);
-        updateItem(i, 7, MAGENTA);
+    for (int col : {5, 6}) {
+        setPixel(0, col, MAGENTA);
+        setPixel(7, col, MAGENTA);
+    }
+    for (int row = 0; row < MATRIX_HEIGHT; row++) {
+        setPixel(row, 0, CYAN);
+        setPixel(row, 3, CYAN);
+        setPixel(row, 4, MAGENTA);
+        setPixel(row, 7, MAGENTA);
     }
 }
 
-void state_unknown(int bike, int row) {
-    int colStart = (bike == 1) ? 0 : 4;
-    int rowStart = (row % 2 == 0) ? 2 : 3;
-    updateItem(rowStart, colStart + 1, RED);
-    updateItem(rowStart, colStart + 2, RED);
-
-    updateItem(rowStart + 2, colStart + 1, RED);
-    updateItem(rowStart + 2, colStart + 2, RED);
+static void drawUnknown(int charger) {
+    const int col = chargerColumn(charger);
+    const int row = (animationRow % 2 == 0) ? 2 : 3;
+    setPixel(row, col + 1, RED);
+    setPixel(row, col + 2, RED);
+    setPixel(row + 2, col + 1, RED);
+    setPixel(row + 2, col + 2, RED);
 }
 
-void state_charging(int bike, int row) {
-    int colStart = (bike == 1) ? 0 : 4;
-    updateItem(row, colStart + 1, BLUE);
-    updateItem(row, colStart + 2, BLUE);
+static void drawCharging(int charger) {
+    const int col = chargerColumn(charger);
+    setPixel(animationRow, col + 1, BLUE);
+    setPixel(animationRow, col + 2, BLUE);
 }
 
-void state_disconnected(int bike, int row) {
-    int colStart = (bike == 1) ? 0 : 4;
-    for (int i = 1; i < 7; i++) {
-        int col = ((i + row) % 2 == 0) ? 1 : 2;
-        updateItem(i, colStart + col, YELLOW);
+static void drawDisconnected(int charger) {
+    const int col = chargerColumn(charger);
+    for (int row = 1; row < 7; row++) {
+        setPixel(row, col + (((row + animationRow) % 2 == 0) ? 1 : 2), YELLOW);
     }
 }
 
-void noWifi(int row) {
-    Color pixelColor = (row % 2 == 0) ? BLUE : RED;
-    updateItem(0, 0, pixelColor);
-    
+static void drawCharger(int charger, const char* state) {
+    if (strcmp(state, "charging") == 0) {
+        drawCharging(charger);
+    } else if (strcmp(state, "disconnected") == 0) {
+        drawDisconnected(charger);
+    } else if (strcmp(state, "unknown") == 0) {
+        drawUnknown(charger);
+    }
+}
+
+// Blinking corner pixel plus a staircase pattern; colors tell WiFi vs HA apart.
+static void drawConnectionProblem(Color blinkA, Color blinkB, Color stairs) {
+    setPixel(0, 0, (animationRow % 2 == 0) ? blinkA : blinkB);
     for (int r = 1; r < 8; r += 2) {
         for (int c = r; c < 8; c++) {
-            updateItem(c, (7 - r), RED);
+            setPixel(c, 7 - r, stairs);
         }
     }
 }
 
-void noHass(int row) {
-    Color pixelColor = (row % 2 == 0) ? GREEN : YELLOW;
-    updateItem(0, 0, pixelColor);
-    
-    for (int r = 1; r < 8; r += 2) {
-        for (int c = r; c < 8; c++) {
-            updateItem(c, (7 - r), BLUE);
-        }
-    }
-}
-
-void otaInProgress() {
-    for (int y = 0; y < 8; y++) {
-        for (int x = 0; x < 8; x++) {
-            if ((x + y) % 2 == 0) {
-                updateItem(x, y, YELLOW);
+static void drawOta() {
+    for (int row = 0; row < MATRIX_HEIGHT; row++) {
+        for (int col = 0; col < MATRIX_WIDTH; col++) {
+            if ((row + col) % 2 == 0) {
+                setPixel(row, col, YELLOW);
             }
         }
     }
 }
 
-int getPixelIndex(int row, int col) {
-    // Simplified from serpentine layout to standard left-to-right wiring to fix pixel scrambling.
-    return (row * MATRIX_WIDTH) + col;
-}
-
-uint8_t highlightBrightness(uint8_t tone) {
-    // Add a fixed value to each color component to make it visibly brighter.
-    const uint8_t brightness_increase = -50;
-    uint16_t new_tone = tone + brightness_increase;
-    if (new_tone > 255) {
-        new_tone = 255;
-    }
-    if (new_tone < 0) {
-        new_tone = 0;
-    }
-    return (uint8_t)new_tone;
-}
-
-uint32_t highlightPixel(int row, int col, uint32_t rgbColor) {
-    if (row == highlightY && col == highlightX) {
-        // Unpack the 32-bit color into R, G, B components
-        uint8_t r = (rgbColor >> 16) & 0xFF;
-        uint8_t g = (rgbColor >> 8) & 0xFF;
-        uint8_t b =  rgbColor & 0xFF;
-
-        // Change brightness of each component for highlight effect
-        r = highlightBrightness(r);
-        g = highlightBrightness(g);
-        b = highlightBrightness(b);
-
-        // Repack the components into a 32-bit color
-        return strip.Color(r, g, b);
-    }
-    return rgbColor;
-}
-
-uint32_t translateColor(Color colorValue) { 
-    switch (colorValue) {
-        case BLACK:   return strip.Color(0, 0, 0);
-        case WHITE:   return strip.Color(255, 255, 255);
-        case RED:     return strip.Color(255, 0, 0);
-        case GREEN:   return strip.Color(0, 255, 0);
-        case BLUE:    return strip.Color(0, 0, 255);
-        case YELLOW:  return strip.Color(255, 255, 0);
-        case CYAN:    return strip.Color(0, 255, 255);
-        case MAGENTA: return strip.Color(255, 0, 255);
-        default:     return strip.Color(0, 0, 0);
+static uint32_t colorToRgb(Color color) {
+    switch (color) {
+        case WHITE:
+            return Adafruit_NeoPixel::Color(255, 255, 255);
+        case RED:
+            return Adafruit_NeoPixel::Color(255, 0, 0);
+        case GREEN:
+            return Adafruit_NeoPixel::Color(0, 255, 0);
+        case BLUE:
+            return Adafruit_NeoPixel::Color(0, 0, 255);
+        case YELLOW:
+            return Adafruit_NeoPixel::Color(255, 255, 0);
+        case CYAN:
+            return Adafruit_NeoPixel::Color(0, 255, 255);
+        case MAGENTA:
+            return Adafruit_NeoPixel::Color(255, 0, 255);
+        case BLACK:
+        default:
+            return 0;
     }
 }
 
-void drawMatrix() {
-    for (int i = 0; i < MATRIX_HEIGHT; i++) {
-        for (int j = 0; j < MATRIX_WIDTH; j++) {
-            int pixelIndex = getPixelIndex(i, j);
-            Color colorValue = (Color)displayArray[i][j];
-            uint32_t rgbColor = translateColor(colorValue);
-
-            rgbColor = highlightPixel(i, j, rgbColor);
-            strip.setPixelColor(pixelIndex, rgbColor);
-        }
-    }
-    strip.show();
+static uint8_t boost(uint8_t tone) {
+    const unsigned value = tone + HIGHLIGHT_BOOST;
+    return value > 255 ? 255 : value;
 }
 
-void render_matrix() {
-    // Clean the display array
-    createArray8x8();
-
-    // OTA DISABLED
-    // if (ota_in_progress) {
-    //     otaInProgress();
-    // } else 
-    if (wifi_connected && ws_connected) {
+static void composeFrame() {
+    clearFrame();
+    if (otaInProgress) {
+        drawOta();
+    } else if (app.wifiConnected && app.hassConnected) {
         drawBorder();
-
-        if (strcmp(sensor_1_state, "charging") == 0) {
-            state_charging(1, chargingRow);
-        } else if (strcmp(sensor_1_state, "disconnected") == 0) {
-            state_disconnected(1, chargingRow);
-        } else if (strcmp(sensor_1_state, "unknown") == 0) {
-            state_unknown(1, chargingRow);
-        }
-
-        if (strcmp(sensor_2_state, "charging") == 0) {
-            state_charging(2, chargingRow);
-        } else if (strcmp(sensor_2_state, "disconnected") == 0) {
-            state_disconnected(2, chargingRow);
-        } else if (strcmp(sensor_2_state, "unknown") == 0) {
-            state_unknown(2, chargingRow);
-        }
-    } else if (wifi_connected && !ws_connected) {
-        noHass(chargingRow);
+        drawCharger(1, app.sensorState[0]);
+        drawCharger(2, app.sensorState[1]);
+    } else if (app.wifiConnected) {
+        drawConnectionProblem(GREEN, YELLOW, BLUE);
     } else {
-        noWifi(chargingRow);
+        drawConnectionProblem(BLUE, RED, RED);
     }
-
-    drawMatrix();
 }
 
-void clean_display() {
-    createArray8x8();
-    strip.clear();
+static void pushFrame() {
+    for (int row = 0; row < MATRIX_HEIGHT; row++) {
+        for (int col = 0; col < MATRIX_WIDTH; col++) {
+            // The matrix is wired row by row, left to right (not serpentine).
+            strip.setPixelColor(row * MATRIX_WIDTH + col, displayPixelColor(row, col));
+        }
+    }
     strip.show();
-    logInfo(F("Display cleared"));
 }
 
-Color stringToColor(String colorName) {
-    colorName.toUpperCase();
-    if (colorName == "BLACK") return BLACK;
-    if (colorName == "WHITE") return WHITE;
-    if (colorName == "RED") return RED;
-    if (colorName == "GREEN") return GREEN;
-    if (colorName == "BLUE") return BLUE;
-    if (colorName == "YELLOW") return YELLOW;
-    if (colorName == "CYAN") return CYAN;
-    if (colorName == "MAGENTA") return MAGENTA;
-    return BLACK; // Default to black if color not found
+void displaySetup() {
+    strip.begin();
+    strip.setBrightness(app.displayBrightness);
+    strip.show();
+}
+
+void displaySetBrightness(uint8_t brightness) {
+    app.displayBrightness = brightness;
+    strip.setBrightness(brightness);
+    pushFrame();
+}
+
+void displaySetOtaInProgress(bool inProgress) {
+    otaInProgress = inProgress;
+    displayRender();
+}
+
+void displayTick() {
+    animationRow = animationRow >= 6 ? 1 : animationRow + 1;
+    advanceHighlight();
+    displayRender();
+}
+
+void displayRender() {
+    composeFrame();
+    pushFrame();
+}
+
+uint32_t displayPixelColor(int row, int col) {
+    const uint32_t rgb = colorToRgb(static_cast<Color>(frame[row][col]));
+    if (row != highlightY || col != highlightX) {
+        return rgb;
+    }
+    return Adafruit_NeoPixel::Color(boost(rgb >> 16), boost(rgb >> 8), boost(rgb));
 }
