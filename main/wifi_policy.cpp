@@ -65,7 +65,7 @@ uint32_t WifiPolicy::scheduleRetry(uint32_t now) {
 }
 
 bool WifiPolicy::consumeCoreRetry(uint8_t reason, uint32_t now) {
-    if (!coreRetryPending_ || reason == WIFI_REASON_ASSOC_LEAVE) {
+    if (!coreRetryPending_ || reason == kReasonAssocLeave) {
         return false;
     }
     coreRetryPending_ = false;
@@ -79,8 +79,7 @@ WifiStep WifiPolicy::tick(uint32_t now, const WifiInputs& in) {
 
     // ASSOC_LEAVE outside Connected is our own (or the core's) disconnect()
     // landing late; it must not abort an attempt that started after it.
-    const bool disconnected =
-        in.disconnected && !(in.reason == WIFI_REASON_ASSOC_LEAVE && state_ != WifiState::Connected);
+    const bool disconnected = in.disconnected && !(in.reason == kReasonAssocLeave && state_ != WifiState::Connected);
     if (state_ != WifiState::Connected) {
         gotIp_ = gotIp_ || in.gotIp;
     }

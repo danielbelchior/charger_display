@@ -153,7 +153,7 @@ TEST_CASE(attempt_times_out_and_resets_driver) {
 TEST_CASE(late_assoc_leave_does_not_abort_attempt) {
     WifiPolicy policy(kConfig);
     policy.start(0);
-    const WifiStep step = policy.tick(100, dropped(WIFI_REASON_ASSOC_LEAVE));
+    const WifiStep step = policy.tick(100, dropped(kReasonAssocLeave));
     CHECK(step.note == WifiNote::None);
     CHECK(policy.state() == WifiState::Connecting);
     // ...and does not use up the core retry.
@@ -217,7 +217,7 @@ TEST_CASE(assoc_leave_while_connected_is_a_real_drop) {
     WifiPolicy policy(kConfig);
     policy.start(0);
     connect(policy, 1000);
-    const WifiStep lost = policy.tick(5000, dropped(WIFI_REASON_ASSOC_LEAVE));
+    const WifiStep lost = policy.tick(5000, dropped(kReasonAssocLeave));
     CHECK(lost.change == WifiChange::Disconnected);
     // ASSOC_LEAVE never waits for the core retry.
     CHECK(policy.state() == WifiState::Waiting);
@@ -304,7 +304,7 @@ TEST_CASE(retry_scheduled_across_wraparound_waits) {
 
 TEST_CASE(reason_names) {
     CHECK_STR(wifiReasonName(0), "none");
-    CHECK_STR(wifiReasonName(WIFI_REASON_ASSOC_LEAVE), "ASSOC_LEAVE");
+    CHECK_STR(wifiReasonName(kReasonAssocLeave), "ASSOC_LEAVE");
     CHECK_STR(wifiReasonName(BEACON_TIMEOUT), "BEACON_TIMEOUT");
     CHECK_STR(wifiReasonName(GROUP_KEY_UPDATE_TIMEOUT), "GROUP_KEY_UPDATE_TIMEOUT");
     CHECK_STR(wifiReasonName(99), "OTHER");

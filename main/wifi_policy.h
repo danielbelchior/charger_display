@@ -47,7 +47,8 @@ struct WifiStep {
     uint32_t sessionMs = 0;  // set with LinkLost: how long the link was up
 };
 
-constexpr uint8_t WIFI_REASON_ASSOC_LEAVE = 8;
+// Not named WIFI_REASON_*: that would clash with ESP-IDF's wifi_err_reason_t enum on device.
+constexpr uint8_t kReasonAssocLeave = 8;
 
 const char* wifiReasonName(uint8_t reason);
 
