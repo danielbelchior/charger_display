@@ -148,6 +148,7 @@ void buildStatusJson(String& out) {
     formatClock(clock, sizeof(clock));
 
     JsonDocument doc;
+    doc["firmware_version"] = FIRMWARE_VERSION;
     doc["uptime"] = millis() / 1000;
     doc["current_time"] = clock;
     doc["ip_address"] = WiFi.localIP().toString();

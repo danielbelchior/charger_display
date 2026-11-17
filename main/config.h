@@ -15,6 +15,13 @@ constexpr uint8_t MATRIX_HEIGHT = 8;
 constexpr uint16_t LED_COUNT = MATRIX_WIDTH * MATRIX_HEIGHT;
 constexpr uint8_t DEFAULT_BRIGHTNESS = 20;
 
+// --- Build ------------------------------------------------------------------
+// Set by scripts/pio_version.py (release tag or `git describe`). Arduino IDE
+// builds do not run that script and report "dev".
+#ifndef FIRMWARE_VERSION
+#define FIRMWARE_VERSION "dev"
+#endif
+
 // --- Network services -------------------------------------------------------
 #ifndef DEVICE_HOSTNAME
 #define DEVICE_HOSTNAME "charger"

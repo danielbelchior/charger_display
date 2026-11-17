@@ -79,6 +79,7 @@ pio device monitor              # serial log at 115200 baud; Ctrl+C to quit
 After boot, the serial log shows lines like:
 
 ```
+Boot: firmware v2026.11.17.1
 Boot: reset reason power-on
 WiFi: connected to 78:45:58:AA:BB:CC ch 6, RSSI -61 dBm, IP 192.168.1.50
 OTA: ready
@@ -134,6 +135,29 @@ espota sends an invitation over UDP to port 3232. The ESP32 then opens a TCP con
 | Build fails with `The program size (...) is greater than maximum allowed` | Firmware larger than the app slot | Check `pio run -t size`; the partition table must stay `min_spiffs.csv` |
 
 To turn OTA off again, set `ENABLE_OTA 0` (or remove the line) and do one more upload. That upload can still go over OTA.
+
+## Versions
+
+Every build has a firmware version. `scripts/pio_version.py` sets it in this order:
+
+1. The `FIRMWARE_VERSION` environment variable. CI release builds set it to the new tag.
+2. `git describe --tags --match 'v*' --always --dirty`:
+   - on a release tag: `v2026.11.17.1`
+   - 3 commits after a tag: `v2026.11.17.1-3-gabc1234`
+   - with uncommitted changes: `...-dirty` (`main/secrets.h` is ignored by git and does not count)
+   - before the first tag: the short commit hash
+3. `dev` if git is not available. Arduino IDE builds always show `dev`.
+
+The version appears in the boot log (`Boot: firmware v2026.11.17.1`), as `firmware_version` in `/status`, under *Firmware* in the web UI, and as the `version` TXT record of the mDNS `_http._tcp` service.
+
+CI creates the tags (see [development.md](development.md#ci)). To flash a release:
+
+```sh
+git fetch --tags
+git checkout v2026.11.17.1
+pio run -t upload               # or: pio run -e ota -t upload
+git checkout main
+```
 
 ## Changing versions
 

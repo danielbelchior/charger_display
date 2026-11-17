@@ -44,6 +44,7 @@ static void startNetworkServices() {
 
     if (MDNS.begin(DEVICE_HOSTNAME)) {
         MDNS.addService("http", "tcp", HTTP_PORT);
+        MDNS.addServiceTxt("http", "tcp", "version", FIRMWARE_VERSION);
         logInfo("mDNS: http://%s.local", DEVICE_HOSTNAME);
     } else {
         logError("mDNS: failed to start");
@@ -81,6 +82,7 @@ void setup() {
     displaySetup();
     displayRender();
 
+    logInfo("Boot: firmware %s", FIRMWARE_VERSION);
     logInfo("Boot: reset reason %s", resetReasonName(esp_reset_reason()));
     if (const char* reason = previousRestartReason()) {
         logInfo("Boot: previous restart requested because: %s", reason);

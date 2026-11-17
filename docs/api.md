@@ -19,6 +19,7 @@ Errors return a 4xx code with `{"status":"error","message":"..."}`.
 
 | Key | Type | Meaning |
 | --- | --- | --- |
+| `firmware_version` | string | Release tag such as `v2026.11.17.1`, a `git describe` string for other builds, or `dev` |
 | `uptime` | int | Seconds since boot |
 | `current_time` | string | `HH:MM:SS` local time, or `+HH:MM:SS` uptime before NTP sync |
 | `ip_address` | string | Station IP |

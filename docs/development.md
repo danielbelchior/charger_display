@@ -58,8 +58,19 @@ If `html-minifier` isn't installed, you can paste the HTML unminified between th
 
 ## CI
 
-`.github/workflows/c-cpp.yml` runs the host tests, then compiles with PlatformIO twice: `pio run -e usb` with the template secrets, and `pio run -e ota` with OTA enabled.
+`.github/workflows/c-cpp.yml` runs these jobs:
 
+| Job | What it does |
+| --- | --- |
+| `version` | Works out the next release number, `vYYYY.MM.DD.N` (Amsterdam date; `N` counts the releases of that day, starting at 1) |
+| `host-tests` | `scripts/test.sh` with GCC, then with Clang plus AddressSanitizer and UndefinedBehaviorSanitizer |
+| `format` | `scripts/format.sh --check` with clang-format 17.0.6 |
+| `build` | `pio run -e usb` with the template secrets and `pio run -e ota` with OTA enabled; both `firmware.bin` files are kept as run artifacts |
+| `release` | Creates the tag and a GitHub release when every other job passed |
+
+The workflow only runs when firmware, tests, scripts, the web UI, `platformio.ini`, `.clang-format`, or the workflow changes. A release is created for pushes to `main` and for manual runs on `main` (*Actions → Firmware CI → Run workflow*). Pull requests and other branches only test and build. Runs on `main` wait for each other instead of being cancelled, so two runs never take the same number.
+
+The release has no binaries attached. CI builds with `secrets_template.h`, so its binaries do not contain your WiFi or Home Assistant settings. To install a release, check out its tag and build locally (see [Versions](platformio.md#versions)).
 ## Log receiver (optional)
 
 `http-server/` contains a small aiohttp app that receives UDP log lines and streams them in a browser. The firmware doesn't send UDP logs by default.

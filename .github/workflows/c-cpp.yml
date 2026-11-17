@@ -26,9 +26,39 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Runs on main are queued, not cancelled, so a release is never cut in half
+  # and two runs cannot pick the same version number.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.next.outputs.version }}
+      release: ${{ steps.next.outputs.release }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # vYYYY.MM.DD.N (Amsterdam date, N counts releases that day). Only pushes
+      # to main and manual runs on main create a release.
+      - name: Compute next version
+        id: next
+        run: |
+          day=$(TZ=Europe/Amsterdam date +%Y.%m.%d)
+          last=$(git tag -l "v${day}.*" | sed "s/^v${day}\.//" | { grep -E '^[0-9]+$' || true; } | sort -n | tail -n 1)
+          version="v${day}.$(( ${last:-0} + 1 ))"
+          release=false
+          if [ "$GITHUB_REF" = "refs/heads/main" ] && { [ "$GITHUB_EVENT_NAME" = "push" ] || [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; }; then
+            release=true
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+          echo "Next version: $version (release: $release)"
+
   host-tests:
     runs-on: ubuntu-latest
 
@@ -66,11 +96,17 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
-    needs: host-tests
+    needs: [version, host-tests]
+    env:
+      # Release builds carry the new tag; other builds fall back to `git describe`
+      # in scripts/pio_version.py.
+      FIRMWARE_VERSION: ${{ needs.version.outputs.release == 'true' && needs.version.outputs.version || '' }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Cache PlatformIO
         uses: actions/cache@v4
@@ -106,3 +142,26 @@ jobs:
             .pio/build/usb/firmware.bin
             .pio/build/ota/firmware.bin
           if-no-files-found: error
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [version, build, format]
+    if: needs.version.outputs.release == 'true'
+    permissions:
+      contents: write
+
+    steps:
+      # No checkout needed: gh creates the tag on the tested commit. The CI
+      # binaries are not attached because they contain the template secrets,
+      # not your WiFi and Home Assistant settings.
+      - name: Create tag and GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          gh release create "$VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "$VERSION" \
+            --generate-notes \
+            --latest

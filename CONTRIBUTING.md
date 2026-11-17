@@ -24,7 +24,7 @@ The hook needs `html-minifier` (`npm install -g html-minifier`). See [docs/devel
 | Formatting | `scripts/format.sh --check` | `clang-format` |
 | Firmware build | `pio run` | [PlatformIO](docs/platformio.md) |
 
-CI runs the host tests and two firmware builds (with and without OTA). Changes to WiFi or Home Assistant handling also need a test on real hardware: leave the display running for at least a day and check `wifi_disconnects` in `/status` and the event log.
+CI runs the host tests, a format check, and two firmware builds (with and without OTA). Every successful push to `main` also creates a dated release tag (see [docs/development.md](docs/development.md#ci)). Changes to WiFi or Home Assistant handling also need a test on real hardware: leave the display running for at least a day and check `wifi_disconnects` in `/status` and the event log.
 
 ## Code guidelines
 

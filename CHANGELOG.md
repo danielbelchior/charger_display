@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to this project are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The firmware has no version numbers yet; entries are grouped under *Unreleased* until the first tagged release.
+All notable changes to this project are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releases are tagged `vYYYY.MM.DD.N` by CI on every successful push to `main`; changes not yet in a release are listed under *Unreleased*.
 
 ## Unreleased
 
@@ -27,6 +27,8 @@ All notable changes to this project are listed here. The format follows [Keep a 
 - Host unit tests for the WiFi reconnect policy, input validation, and the log ring (`tests/host`, `scripts/test.sh`), run in CI.
 - Documentation: architecture, API, WiFi troubleshooting, development, domain glossary (`CONTEXT.md`), decision records (`docs/adr/`), contributor guide, and agent instructions (`AGENTS.md`).
 - Code style config: `.editorconfig`, `.clang-format`, `scripts/format.sh`.
+- Firmware version: CI tags every successful push to `main` (and manual runs on `main`) as `vYYYY.MM.DD.N` and creates a GitHub release. The version is shown in the boot log, the web UI, `/status` (`firmware_version`), and mDNS. Local builds use `git describe` (`scripts/pio_version.py`).
+- CI also checks formatting and runs the host tests with sanitizers.
 
 ### Changed
 

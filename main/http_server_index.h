@@ -161,6 +161,7 @@ header {
 .stat dd { margin: 0; font-size: 22px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .stat dd small { font-size: 12px; color: var(--muted); font-weight: 400; margin-left: 4px; }
 .stat .mono { font-family: var(--mono); font-size: 16px; }
+.stat:last-child { grid-column: span 3; }
 .bars { display: inline-flex; align-items: flex-end; gap: 3px; height: 18px; margin-right: 8px; vertical-align: -2px; }
 .bars i { width: 5px; border-radius: 1px; background: var(--line); }
 .bars i:nth-child(1) { height: 25%; } .bars i:nth-child(2) { height: 50%; } .bars i:nth-child(3) { height: 75%; } .bars i:nth-child(4) { height: 100%; }
@@ -240,7 +241,7 @@ body.stale .card { filter: saturate(.4); }
   .wrap { padding: 18px 14px 40px; }
   .bays { grid-template-columns: 1fr; }
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .stat:last-child { grid-column: span 2; }
+  .stat:last-child { grid-column: auto; }
   .stat .mono { font-size: 13px; }
   .header-right { width: 100%; }
   .bay-num { font-size: 48px; }
@@ -339,6 +340,7 @@ body.stale .card { filter: saturate(.4); }
           <div class="stat"><dt>IP address</dt><dd class="mono" id="ip_address">-</dd></div>
           <div class="stat"><dt>Access point</dt><dd class="mono" id="bssid">-</dd></div>
           <div class="stat"><dt>Channel</dt><dd id="channel">-</dd></div>
+          <div class="stat"><dt>Firmware</dt><dd class="mono" id="firmware_version">-</dd></div>
         </dl>
       </section>
     </div>
@@ -492,6 +494,7 @@ body.stale .card { filter: saturate(.4); }
     $("last_reason").textContent = d.wifi_disconnects ? (d.wifi_last_disconnect_reason || "-") : "none";
     $("bssid").textContent = d.wifi_bssid || "-";
     $("channel").textContent = d.wifi_channel || "-";
+    $("firmware_version").textContent = d.firmware_version || "-";
     const rssi = d.wifi_connected && typeof d.wifi_rssi === "number" ? d.wifi_rssi : null;
     $("rssi").innerHTML = rssi === null ? "-" : `${rssi}<small>dBm</small>`;
     $("bars").dataset.level = rssi === null ? 0 : rssi >= -55 ? 4 : rssi >= -65 ? 3 : rssi >= -75 ? 2 : 1;
@@ -597,12 +600,13 @@ body.stale .card { filter: saturate(.4); }
       "08:13:51 WARNING: WiFi: disconnected after 5321s, reason 200 (BEACON_TIMEOUT)",
       "06:45:10 INFO: HASS: door opened: binary_sensor.door_backyard_contact",
       "+00:00:04 INFO: mDNS: http://charger.local",
-      "+00:00:01 INFO: Boot: reset reason power-on"
+      "+00:00:01 INFO: Boot: reset reason power-on",
+      "+00:00:01 INFO: Boot: firmware v2026.11.17.1"
     ];
     function push() {
       tick++;
       render({
-        uptime: 98765 + tick, current_time: new Date().toTimeString().slice(0, 8), ip_address: "192.168.1.50",
+        firmware_version: "v2026.11.17.1", uptime: 98765 + tick, current_time: new Date().toTimeString().slice(0, 8), ip_address: "192.168.1.50",
         wifi_connected: true, ws_connected: true, wifi_last_connect_attempt: 1520 + tick,
         wifi_rssi: -58, wifi_bssid: "78:45:58:AA:BB:CC", wifi_channel: 6, wifi_disconnects: 1,
         wifi_last_disconnect_reason: "BEACON_TIMEOUT", sensor_1_state: "charging", sensor_2_state: "disconnected",

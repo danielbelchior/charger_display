@@ -12,6 +12,7 @@ Arduino IDE builds depend on whatever core and library versions are installed on
 - `platformio.ini` is the single build definition: board `esp32dev`, the pioarduino platform pinned to a release (Arduino-ESP32 3.2.0), the `min_spiffs.csv` partition table, and `lib_deps` with version ranges.
 - Two environments: `usb` (default, serial upload) and `ota` (espota to `charger.local`). `scripts/pio_ota_auth.py` reads the OTA password from `main/secrets.h`, so it is written down only once.
 - CI runs `pio run -e usb` and an OTA-enabled `pio run -e ota`, after the host tests (`scripts/test.sh`, plain C++ compiler).
+- `scripts/pio_version.py` compiles the version (CI release tag or `git describe`) into `FIRMWARE_VERSION`.
 - `src_dir = main`, so the sketch still opens in the Arduino IDE.
 
 ## Consequences
