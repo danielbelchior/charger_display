@@ -11,10 +11,10 @@ Thanks for helping. This is a small hobby firmware, so the process is light, but
 
 ```sh
 cp main/secrets_template.h main/secrets.h     # fill in your values; never commit it
-git config core.hooksPath .githooks          # regenerates the web UI header on commit
+git config core.hooksPath .githooks          # web UI header sync, format check, host tests on commit
 ```
 
-The hook needs `html-minifier` (`npm install -g html-minifier`). See [docs/development.md](docs/development.md) for details.
+The hook minifies the web UI if `html-minifier-terser` is installed (`npm install -g html-minifier-terser`) and embeds it unminified otherwise. See [docs/development.md](docs/development.md) for details.
 
 ## Checks to run
 

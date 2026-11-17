@@ -19,7 +19,7 @@ description: Edit the charger_display web control panel and sync it into the fir
 1. Edit `control-panel/index.html`.
 2. Preview: open it in a browser via `file://` (demo mode). If a headless browser is available, take a screenshot to check layout at desktop and phone widths.
 3. If the UI needs a new field, add it to the `/status` JSON in `main/http_server.cpp` and document it in `docs/api.md`.
-4. Sync the header. With `html-minifier` installed and the hook enabled (`git config core.hooksPath .githooks`), committing the HTML regenerates it. Otherwise, write it unminified:
+4. Sync the header. With the hook enabled (`git config core.hooksPath .githooks`), committing the HTML regenerates it (minified if `html-minifier-terser` or `html-minifier` is installed). Otherwise, write it unminified:
 
    ```sh
    { printf 'const char index_html[] PROGMEM = R"rawliteral(\n'; cat control-panel/index.html; printf ')rawliteral";\n'; } > main/http_server_index.h

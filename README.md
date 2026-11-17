@@ -62,5 +62,5 @@ scripts/         test.sh, format.sh, and the OTA password helper for PlatformIO
 platformio.ini   Build definition (board, core, partitions, libraries, usb/ota)
 docs/            Architecture, API, PlatformIO, WiFi troubleshooting, ADRs
 http-server/     Optional development tool: UDP log receiver with a web tail
-.githooks/       pre-commit hook that regenerates the web UI header
+.githooks/       pre-commit hook: web UI header sync, format check, host tests
 ```

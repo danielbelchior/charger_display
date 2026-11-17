@@ -1,62 +1,78 @@
 #!/bin/bash
-echo "pre-commit hook started"
-set -e
+# Enable with: git config core.hooksPath .githooks
+#
+# 1. control-panel/index.html staged: regenerate main/http_server_index.h from
+#    the staged HTML (minified with html-minifier-terser or html-minifier if
+#    installed, otherwise copied unminified) and stage it.
+# 2. Firmware or host-test sources staged: clang-format check and host tests.
+set -euo pipefail
 
 HTML_FILE="control-panel/index.html"
 HEADER_FILE="main/http_server_index.h"
 
-# Only run if index.html is staged
-echo "Checking if $HTML_FILE is staged"
-if ! git diff --cached --name-only | grep -q "^$HTML_FILE$"; then
-  echo "$HTML_FILE is not staged, exiting"
-  exit 0
-fi
-echo "$HTML_FILE is staged"
+cd "$(git rev-parse --show-toplevel)"
+STAGED=$(git diff --cached --name-only --diff-filter=ACMR)
 
-# Ensure tools are installed
-echo "Checking for html-minifier"
-command -v html-minifier >/dev/null 2>&1 || {
-  echo "html-minifier not found. Install with: npm install -g html-minifier";
-  exit 1;
+staged() {
+    grep -Eq "$1" <<<"$STAGED"
 }
-echo "html-minifier found"
 
-# Minify HTML (with CSS inlined)
-echo "Minifying $HTML_FILE"
-MINIFIED_HTML=$(html-minifier \
-  --collapse-whitespace \
-  --remove-comments \
-  --minify-css true \
-  --minify-js true \
-  "$HTML_FILE")
-echo "Minification complete"
+# minify <html> <out>
+minify() {
+    local tool
+    for tool in html-minifier-terser html-minifier; do
+        if command -v "$tool" >/dev/null 2>&1; then
+            if "$tool" --collapse-whitespace --remove-comments --minify-css true --minify-js true "$1" >"$2"; then
+                return 0
+            fi
+            echo "pre-commit: $tool failed, embedding the HTML unminified" >&2
+            break
+        fi
+    done
+    cp "$1" "$2"
+}
 
-# Escape for C++ string literal
-echo "Escaping HTML"
-ESCAPED=$(echo "$MINIFIED_HTML" | sed 's/\\/\\\\/g; s/"/\\"/g; s/$/\\n/' | tr -d '\r')
-echo "Escaping complete"
+if staged "^${HTML_FILE}\$"; then
+    SRC=$(mktemp)
+    MIN=$(mktemp)
+    TMP=$(mktemp)
+    trap 'rm -f "$SRC" "$MIN" "$TMP"' EXIT
+    # Staged content, not the working tree, so a partial `git add -p` stays consistent.
+    git show ":$HTML_FILE" >"$SRC"
 
-# Write header file to a temp file
-echo "Writing to temporary file"
-echo "$TMP_FILE"
-TMP_FILE=$(mktemp)
-echo "const char index_html[] PROGMEM = R\"rawliteral(" > "$TMP_FILE"
-echo "$MINIFIED_HTML" >> "$TMP_FILE"
-echo ")rawliteral\";" >> "$TMP_FILE"
-echo "Finished writing to temporary file"
+    if grep -qF ')rawliteral"' "$SRC"; then
+        echo "pre-commit: $HTML_FILE contains )rawliteral\" which ends the C++ raw string" >&2
+        exit 1
+    fi
 
-# Replace only if changed
-echo "Comparing temporary file with $HEADER_FILE"
-if [ ! -f "$HEADER_FILE" ] || ! cmp -s "$TMP_FILE" "$HEADER_FILE"; then
-  echo "Files are different, updating $HEADER_FILE"
-  mv "$TMP_FILE" "$HEADER_FILE"
-  git add "$HEADER_FILE"
-  echo "✅ Updated $HEADER_FILE"
-else
-  echo "Files are the same, no changes needed"
-  rm "$TMP_FILE"
-  echo "ℹ️  No changes in $HEADER_FILE"
+    minify "$SRC" "$MIN"
+    {
+        printf 'const char index_html[] PROGMEM = R"rawliteral(\n'
+        cat "$MIN"
+        printf ')rawliteral";\n'
+    } >"$TMP"
+
+    if [ ! -f "$HEADER_FILE" ] || ! cmp -s "$TMP" "$HEADER_FILE"; then
+        cp "$TMP" "$HEADER_FILE"
+        git add "$HEADER_FILE"
+        echo "pre-commit: updated $HEADER_FILE"
+    fi
 fi
 
-echo "pre-commit hook finished"
+if staged '^(main|tests/host)/.*\.(cpp|h|ino)$'; then
+    if command -v "${CLANG_FORMAT:-clang-format}" >/dev/null 2>&1; then
+        scripts/format.sh --check || {
+            echo "pre-commit: formatting differs; run scripts/format.sh and stage the result" >&2
+            exit 1
+        }
+    else
+        echo "pre-commit: clang-format not found, skipping the format check (CI still runs it)" >&2
+    fi
+fi
 
+if staged '^(main|tests/host)/|^scripts/test\.sh$'; then
+    scripts/test.sh >/dev/null 2>&1 || {
+        echo "pre-commit: host tests failed; run scripts/test.sh for details" >&2
+        exit 1
+    }
+fi

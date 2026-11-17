@@ -35,18 +35,23 @@ scripts/format.sh --check    # fail if anything needs formatting
 Uses `.clang-format` (4 spaces, 120 columns). Set `CLANG_FORMAT=/path/to/clang-format` if it is not on your `PATH`. `.editorconfig` covers the other file types.
 ## Web UI
 
-`control-panel/index.html` is the source. The firmware serves the minified copy in `main/http_server_index.h`. The pre-commit hook regenerates it when the HTML is staged:
+`control-panel/index.html` is the source. The firmware serves the copy in `main/http_server_index.h`. Enable the pre-commit hook once:
 
 ```sh
 git config core.hooksPath .githooks
-npm install -g html-minifier   # needed by the hook
+npm install -g html-minifier-terser   # optional: smaller header
 ```
+
+The hook does three things:
+
+- When `control-panel/index.html` is staged, it rebuilds the header from the staged HTML and stages it. It minifies with `html-minifier-terser` (or the older `html-minifier`) if installed; otherwise, or if minifying fails, it embeds the HTML unminified. It refuses HTML that contains `)rawliteral"`.
+- When firmware or host-test sources are staged, it runs `scripts/format.sh --check` (skipped with a warning if clang-format is missing) and `scripts/test.sh`.
 
 The UI uses relative URLs, so it works from `charger.local`, the IP address, or any other hostname. It is a single self-contained file (no CDN, no web fonts), so it also loads on networks without internet access.
 
 To preview design changes without a device, open `control-panel/index.html` directly in a browser (`file://`) or add `?demo` to the URL. The page then animates sample data instead of connecting to the display.
 
-If `html-minifier` isn't installed, you can paste the HTML unminified between the `R"rawliteral(` and `)rawliteral"` markers in `main/http_server_index.h`. The firmware serves it the same way, it just takes more flash.
+Without the hook, paste the HTML unminified between the `R"rawliteral(` and `)rawliteral"` markers in `main/http_server_index.h`. The firmware serves it the same way, it just takes more flash.
 
 ## Adding a module
 

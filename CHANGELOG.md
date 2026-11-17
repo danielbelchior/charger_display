@@ -29,6 +29,7 @@ All notable changes to this project are listed here. The format follows [Keep a 
 - Code style config: `.editorconfig`, `.clang-format`, `scripts/format.sh`.
 - Firmware version: CI tags every successful push to `main` (and manual runs on `main`) as `vYYYY.MM.DD.N` and creates a GitHub release. The version is shown in the boot log, the web UI, `/status` (`firmware_version`), and mDNS. Local builds use `git describe` (`scripts/pio_version.py`).
 - CI also checks formatting and runs the host tests with sanitizers.
+- The pre-commit hook builds the web UI header from the staged HTML, falls back to an unminified copy when no minifier is installed (instead of blocking the commit), prefers `html-minifier-terser`, and runs the format check and host tests when C++ sources are staged.
 
 ### Changed
 

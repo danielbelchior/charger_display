@@ -17,5 +17,5 @@ The control panel is served by the ESP32 from flash. The display often sits on a
 ## Consequences
 
 - Every byte counts against flash; keep the page lean and system-font based.
-- `control-panel/index.html` and `main/http_server_index.h` must stay in sync. The pre-commit hook in `.githooks/` regenerates the header (minified) when the HTML is staged; without `html-minifier`, copy it unminified.
+- `control-panel/index.html` and `main/http_server_index.h` must stay in sync. The pre-commit hook in `.githooks/` regenerates the header from the staged HTML (minified when `html-minifier-terser` or `html-minifier` is installed, unminified otherwise).
 - New status fields need changes in three places: `http_server.cpp`, the UI, and `docs/api.md`.
