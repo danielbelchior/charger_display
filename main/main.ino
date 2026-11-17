@@ -82,7 +82,7 @@ void setup() {
     displaySetup();
     displayRender();
 
-    logInfo("Boot: firmware %s", FIRMWARE_VERSION);
+    logInfo("Boot: firmware %s, Arduino-ESP32 %s", FIRMWARE_VERSION, ESP_ARDUINO_VERSION_STR);
     logInfo("Boot: reset reason %s", resetReasonName(esp_reset_reason()));
     if (const char* reason = previousRestartReason()) {
         logInfo("Boot: previous restart requested because: %s", reason);
