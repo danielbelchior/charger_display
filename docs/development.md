@@ -15,7 +15,7 @@ The full guide covers installing PlatformIO, the first USB flash, OTA setup, fir
 
 ## Host unit tests
 
-The Arduino-free modules (`wifi_policy.*`, `validation.*`, `log_ring.h`) have unit tests in `tests/host/` that run on your computer with any C++17 compiler. No ESP32 toolchain is needed.
+The Arduino-free modules (`wifi_policy.*`, `validation.*`, `log_ring.h`, `display_frame.*`) have unit tests in `tests/host/` that run on your computer with any C++17 compiler. No ESP32 toolchain is needed.
 
 ```sh
 scripts/test.sh                 # build and run all tests

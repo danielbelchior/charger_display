@@ -12,7 +12,8 @@ The firmware is a plain Arduino sketch in `main/`. Everything runs cooperatively
 | `logging.*` | `logInfo/logWarning/logError/logDebug` (printf-style). Logs go to Serial and a 30-line `LogRing` shown in the web UI |
 | `log_ring.h` | Fixed-size ring of log lines. Pure, host tested |
 | `buzzer.*` | Blocking beep patterns |
-| `display.*` | Turns `app` into a frame, handles animation, and drives the NeoPixel strip |
+| `display_frame.*` | Builds the 8x8 frame (batteries, status column, OTA) from charger states, link state, and the animation step. Pure, host tested |
+| `display.*` | Feeds `app` into `composeFrame()`, advances the animation step while connected, and drives the NeoPixel strip |
 | `wifi_policy.*` | WiFi reconnect state machine (Waiting / Connecting / Connected, backoff, core retry, restart). Pure, host tested |
 | `wifi_manager.*` | Adapter: radio settings, driver events into `WifiPolicy`, its actions back to the driver, signal monitoring |
 | `validation.*` | Parsing of REST input (brightness, sensor id, sensor state) and the HA on-state check. Pure, host tested |
@@ -22,7 +23,7 @@ The firmware is a plain Arduino sketch in `main/`. Everything runs cooperatively
 | `ota.*` | ArduinoOTA, compiled only when `ENABLE_OTA` is 1 |
 | `main.ino` | `setup()` and `loop()` wiring the modules together |
 
-Dependencies point one way: `main.ino` uses all modules, and modules use `config.h`, `app_state.h`, and `logging.h`. No module includes `main.ino` symbols. The pure modules (`wifi_policy`, `validation`, `log_ring`) include only the C/C++ standard library, so `tests/host/` can build them without Arduino ([ADR 0005](adr/0005-pure-logic-host-tests.md)).
+Dependencies point one way: `main.ino` uses all modules, and modules use `config.h`, `app_state.h`, and `logging.h`. No module includes `main.ino` symbols. The pure modules (`wifi_policy`, `validation`, `log_ring`, `display_frame`) include only the C/C++ standard library, so `tests/host/` can build them without Arduino ([ADR 0005](adr/0005-pure-logic-host-tests.md)).
 
 ## Main loop
 
@@ -34,7 +35,7 @@ loop()
  ├─ hassLoop()           connect, authenticate, subscribe, ping, refresh
  ├─ httpServerLoop()     web requests and status WebSocket
  ├─ superviseHomeAssistant()  reboot after 10 min without HA
- └─ displayTick()        once per second
+ └─ displayLoop()        animation once per second, ON/OFF scroll every 90 ms
 ```
 
 ## WiFi connection handling

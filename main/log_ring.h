@@ -13,8 +13,10 @@ class LogRing {
 public:
     // Stores a copy of `line`, truncated to LineLen - 1 characters.
     void push(const char* line) {
-        strncpy(lines_[head_], line ? line : "", LineLen - 1);
-        lines_[head_][LineLen - 1] = '\0';
+        const char* text = line ? line : "";
+        const size_t len = strnlen(text, LineLen - 1);
+        memcpy(lines_[head_], text, len);
+        lines_[head_][len] = '\0';
         head_ = (head_ + 1) % Capacity;
         if (count_ < Capacity) {
             count_++;

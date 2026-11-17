@@ -6,15 +6,27 @@ on:
       - "main/**"
       - "tests/**"
       - "scripts/**"
+      - "control-panel/**"
       - "platformio.ini"
+      - ".clang-format"
       - ".github/workflows/**"
   pull_request:
     paths:
       - "main/**"
       - "tests/**"
       - "scripts/**"
+      - "control-panel/**"
       - "platformio.ini"
+      - ".clang-format"
       - ".github/workflows/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   host-tests:
@@ -24,8 +36,33 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run host unit tests
+      # wifi_policy, validation, log_ring, display_frame (see tests/host).
+      - name: Run host unit tests (GCC)
         run: scripts/test.sh
+
+      - name: Run host unit tests (Clang, ASan + UBSan)
+        run: scripts/test.sh
+        env:
+          CXX: clang++
+          CXXFLAGS: -fsanitize=address,undefined -fno-sanitize-recover=all
+
+  format:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Pinned so formatting does not change with the runner image.
+      - name: Install clang-format
+        run: pip install clang-format==17.0.6
+
+      - name: Check formatting
+        run: scripts/format.sh --check
 
   build:
     runs-on: ubuntu-latest
@@ -53,10 +90,19 @@ jobs:
       - name: Prepare secrets.h
         run: cp main/secrets_template.h main/secrets.h
 
-      - name: Compile
+      - name: Compile (USB env)
         run: pio run -e usb
 
-      - name: Compile with OTA enabled
+      - name: Compile with OTA enabled (OTA env)
         run: |
           echo '#define ENABLE_OTA 1' >> main/secrets.h
           pio run -e ota
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ github.sha }}
+          path: |
+            .pio/build/usb/firmware.bin
+            .pio/build/ota/firmware.bin
+          if-no-files-found: error

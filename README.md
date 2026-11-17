@@ -16,20 +16,24 @@ Pins are set in `main/config.h`.
 
 ## What the matrix shows
 
+The matrix is split into three parts: columns 0-2 are charger 1 (cyan pixel on top), columns 5-7 are charger 2 (magenta pixel on top), and columns 3-4 are the status column. Every LED is either off or one full color; the brightness setting dims the whole display.
+
 | Pattern | Meaning |
 | --- | --- |
-| Cyan (left) and magenta (right) frames, blue bar moving down | Charger is `charging` |
-| Yellow zig-zag inside the frame | Charger is `disconnected` |
-| Red blinking dots inside the frame | Charger state `unknown` |
-| Red staircase, blue/red blinking corner | No WiFi |
-| Blue staircase, green/yellow blinking corner | WiFi up, Home Assistant not connected |
+| Blue battery outline filling with green from the bottom, one row per second | Charger is `charging` |
+| Empty blue battery outline | Charger is `disconnected` |
+| Yellow battery outline with a blinking center pixel | Any other charger state (`unknown`, `unavailable`, ...) |
+| White bar moving down the status column | All good; shows the firmware is alive |
+| Dotted yellow status column | WiFi up, Home Assistant not connected |
+| Solid red status column | No WiFi |
+| Green **ON** or red **OFF** scrolling across, twice | The air compressor (sensor 3) turned on or off. It also beeps: 3 short beeps for on, 1 long for off |
 | Yellow checkerboard | OTA update in progress (only if OTA is enabled) |
 
-A single bright pixel moves one step around the border every second, so you can tell the firmware is alive.
+While the status column shows a fault, the batteries freeze on the last known state and resume when the connection is back.
 
 ## Quick start
 
-1. Copy `main/secrets_template.h` to `main/secrets.h` and fill in your WiFi details, Home Assistant host, token, and the three sensor entity IDs.
+1. Copy `main/secrets_template.h` to `main/secrets.h` and fill in your WiFi details, Home Assistant host, token, and the three sensor entity IDs (two chargers and the air compressor).
 2. Install [PlatformIO](https://platformio.org), connect the board over USB, then build and flash (details in [docs/platformio.md](docs/platformio.md)):
    ```sh
    pio run -t upload -t monitor

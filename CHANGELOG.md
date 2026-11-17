@@ -30,8 +30,11 @@ All notable changes to this project are listed here. The format follows [Keep a 
 
 ### Changed
 
+- Default timezone is Europe/Amsterdam (`CET-1CEST,M3.5.0,M10.5.0/3`). Set `TIMEZONE` in `secrets.h` to change it.
+- Sensor 3 is the air compressor: on a state change it scrolls a green `ON` or red `OFF` across the matrix, in addition to the existing beeps. The web UI labels it "Air compressor".
+- New matrix layout: each charger is a battery icon (green fill while charging, empty blue outline when disconnected, yellow when unknown) and the middle columns show the heartbeat or the WiFi / Home Assistant fault. During an outage the chargers keep their last known state instead of switching to `unknown`.
 - Partition table is `min_spiffs.csv` (two 1.9 MB app slots) instead of the 1.25 MB default, to leave room for OTA. The first flash after updating must be over USB.
-- Firmware split into modules (`config`, `app_state`, `logging`, `buzzer`, `display`, `wifi_policy`, `wifi_manager`, `hass`, `validation`, `http_server`, `ota`). `declarations.h` and `util.*` are gone.
+- Firmware split into modules (`config`, `app_state`, `logging`, `buzzer`, `display`, `display_frame`, `wifi_policy`, `wifi_manager`, `hass`, `validation`, `http_server`, `ota`). `declarations.h` and `util.*` are gone.
 - Time comes from SNTP via `configTzTime` instead of the NTPClient library.
 - Logging uses printf-style `logInfo/logWarning/logError/logDebug`.
 - REST input (brightness, sensor id, sensor state) is validated before use.

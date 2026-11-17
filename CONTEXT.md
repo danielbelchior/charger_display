@@ -9,16 +9,21 @@ Shared vocabulary for this repository. Use these terms in code, logs, docs, and 
 | **Display** | The whole device: ESP32-WROOM-32, 8x8 WS2812B **matrix**, and active-low **buzzer**. Hostname `charger` by default |
 | **Matrix** | The 8x8 LED grid. Left half (columns 0-3) is **charger 1**, right half (columns 4-7) is **charger 2**. Wired row by row, not serpentine |
 | **Frame** | One full image pushed to the matrix. A new frame is drawn every `DISPLAY_FRAME_MS` (1 s) |
-| **Heartbeat pixel** | The single bright pixel that moves one step around the border each frame. Proves the main loop is alive |
-| **Pattern** | What a half or the whole matrix shows for a given state (charging bar, zig-zag, staircase, checkerboard). Listed in the README |
-| **Brightness** | NeoPixel brightness 0-255, default 20. Set from the web UI, not persisted |
+| **Battery** | The 3x8 icon for one charger: a terminal pixel on row 0 (cyan for charger 1, magenta for charger 2) and a 3x7 body. Blue outline; green fill while charging; yellow when the state is unknown |
+| **Status column** | Columns 3-4. Shows the heartbeat when all is well, dotted yellow when Home Assistant is down, solid red when WiFi is down |
+| **Heartbeat** | The white bar that moves one row down the status column each frame. Proves the main loop is alive |
+| **Frozen** | While the status column shows a fault, the animation step stops, so the batteries keep their last known frame |
+| **Pattern** | What the matrix shows for a given state. Built by `composeFrame()` in `main/display_frame.cpp` and listed in the README |
+| **Message** | A short word (`ON` / `OFF`) scrolled right to left across rows 1-5, twice, at 90 ms per column. Shown when the air compressor changes state, then the normal layout returns |
+| **Palette** | The 8 `Color` values (off plus seven full colors). The hardware only dims the whole display, so patterns never use partial brightness |
+| **Brightness** | NeoPixel brightness 0-255 for the whole display, default 20. Set from the web UI, not persisted |
 
 ## Home Assistant
 
 | Term | Meaning |
 | --- | --- |
 | **HA** | Home Assistant, reached at `HASS_HOST:HASS_PORT` with a long-lived access **token** |
-| **Sensor** | One of three HA entities in `SENSOR_ENTITY_IDS` (from `secrets.h`). Sensors 1 and 2 are the **chargers**; sensor 3 only makes sounds |
+| **Sensor** | One of three HA entities in `SENSOR_ENTITY_IDS` (from `secrets.h`). Sensors 1 and 2 are the **chargers**; sensor 3 is the **air compressor** (beeps and ON/OFF text, not shown otherwise) |
 | **Sensor id** | 1-based index used by the REST API (`/sensor/{1..3}/...`). Code arrays are 0-based (`index = id - 1`) |
 | **Sensor state** | The HA state string, stored in `app.sensorState`. The display understands `charging`, `disconnected`, and anything else as `unknown`. Max 15 characters from `[A-Za-z0-9_-]` |
 | **Door sensor** | Entities in `DOOR_SENSOR_ENTITY_IDS`. Turning **on** gives a short beep. They are not shown on the matrix |

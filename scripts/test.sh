@@ -18,6 +18,7 @@ mkdir -p "$OUT"
     "$ROOT"/tests/host/*.cpp \
     "$ROOT/main/wifi_policy.cpp" \
     "$ROOT/main/validation.cpp" \
+    "$ROOT/main/display_frame.cpp" \
     -o "$OUT/run_tests"
 
 "$OUT/run_tests" "$@"

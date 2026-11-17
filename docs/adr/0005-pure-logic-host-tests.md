@@ -9,7 +9,7 @@ The WiFi reconnect bugs were timing and ordering problems (late events, the core
 
 ## Decision
 
-- Logic that decides something is written without Arduino or ESP-IDF headers: `wifi_policy.*` (reconnect state machine), `validation.*` (REST input parsing, HA on-state), `log_ring.h` (event log storage).
+- Logic that decides something is written without Arduino or ESP-IDF headers: `wifi_policy.*` (reconnect state machine), `validation.*` (REST input parsing, HA on-state), `log_ring.h` (event log storage), `display_frame.*` (matrix patterns).
 - Hardware modules are thin adapters that gather inputs, call the pure code, and perform its outputs.
 - `tests/host/` holds unit tests for those modules with a small built-in harness (no framework download). `scripts/test.sh` builds and runs them; CI runs them before the firmware build.
 - Time is passed in as a `uint32_t now` argument, never read inside pure code, so tests can step through time and across the 49-day `millis()` wraparound.

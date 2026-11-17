@@ -17,12 +17,13 @@
 // Expected states: "charging", "disconnected", "unknown".
 #define SENSOR_1_ENTITY_ID "sensor.sensor_1"
 #define SENSOR_2_ENTITY_ID "sensor.sensor_2"
-// Sensor 3 only beeps: 3 short beeps when it turns "on", one long beep otherwise.
+// Sensor 3 is the air compressor. When it turns "on": 3 short beeps and a green
+// "ON" scrolls across the matrix. Otherwise: one long beep and a red "OFF".
 #define SENSOR_3_ENTITY_ID "sensor.sensor_3"
 
 // --- Optional overrides (defaults live in config.h) ---
 // #define NTP_SERVER "pool.ntp.org"
-// #define TIMEZONE "CET-1CEST,M3.5.0,M10.5.0/3"
+// #define TIMEZONE "UTC0"   // default is Europe/Amsterdam
 // #define DEVICE_HOSTNAME "charger"
 // #define DOOR_SENSOR_ENTITY_IDS { "binary_sensor.front_door_contact" }
 // OTA: enable before the first USB flash, then update with `pio run -e ota -t upload`

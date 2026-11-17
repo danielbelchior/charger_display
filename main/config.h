@@ -24,9 +24,10 @@ constexpr uint8_t DEFAULT_BRIGHTNESS = 20;
 #define NTP_SERVER "pool.ntp.org"
 #endif
 
-// POSIX TZ string, e.g. "CET-1CEST,M3.5.0,M10.5.0/3" for Central Europe.
+// POSIX TZ string. Default: Europe/Amsterdam (CET, CEST from the last Sunday of
+// March 02:00 to the last Sunday of October 03:00). UTC is "UTC0".
 #ifndef TIMEZONE
-#define TIMEZONE "UTC0"
+#define TIMEZONE "CET-1CEST,M3.5.0,M10.5.0/3"
 #endif
 
 constexpr uint16_t HTTP_PORT = 80;
@@ -66,6 +67,9 @@ constexpr uint32_t HASS_RESTART_AFTER_MS = 10UL * 60UL * 1000UL;
 
 // --- Display / UI -----------------------------------------------------------
 constexpr uint32_t DISPLAY_FRAME_MS = 1000;
+// Scrolling ON/OFF text for the air compressor (sensor 3).
+constexpr uint32_t DISPLAY_MESSAGE_STEP_MS = 90;
+constexpr uint32_t DISPLAY_MESSAGE_PASSES = 2;
 
 // --- Logging ----------------------------------------------------------------
 constexpr size_t LOG_BUFFER_SIZE = 30;

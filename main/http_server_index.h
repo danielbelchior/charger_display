@@ -291,7 +291,7 @@ body.stale .card { filter: saturate(.4); }
             <output id="brightnessValue">-</output>
           </div>
         </div>
-        <div class="alert-sensor"><span>Alert sensor</span><b id="sensor_3_state">-</b></div>
+        <div class="alert-sensor"><span>Air compressor</span><b id="sensor_3_state">-</b></div>
         <div class="actions">
           <button class="btn" id="beepBtn" type="button">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg>
@@ -575,21 +575,21 @@ body.stale .card { filter: saturate(.4); }
   // ---- demo data (file:// or ?demo) ----
   function startDemo() {
     let tick = 0;
-    const C = { K: 0, C: 0x00ffff, M: 0xff00ff, B: 0x0000ff, Y: 0xffff00 };
+    const C = { W: 0xffffff, G: 0x00ff00, B: 0x0000ff, C: 0x00ffff, M: 0xff00ff };
+    // Same layout as main/display_frame.cpp: charger 1 charging, charger 2 disconnected.
     function frame() {
       const g = Array.from({ length: 8 }, () => Array(8).fill(0));
-      for (let r = 0; r < 8; r++) { g[r][0] = g[r][3] = C.C; g[r][4] = g[r][7] = C.M; }
-      [1, 2].forEach((c) => { g[0][c] = g[7][c] = C.C; });
-      [5, 6].forEach((c) => { g[0][c] = g[7][c] = C.M; });
-      const row = 1 + tick % 6;
-      g[row][1] = g[row][2] = C.B;
-      for (let r = 1; r < 7; r++) g[r][4 + ((r + row) % 2 === 0 ? 1 : 2)] = C.Y;
-      const p = tick % 28, x = p < 8 ? p : p < 15 ? 7 : p < 22 ? 21 - p : 0, y = p < 8 ? 0 : p < 15 ? p - 7 : p < 22 ? 7 : 28 - p;
-      const v = g[y][x], boost = (n) => Math.min(255, n + 206);
-      g[y][x] = boost(v >> 16 & 255) << 16 | boost(v >> 8 & 255) << 8 | boost(v & 255);
+      const step = tick % 8;
+      [[0, C.C], [5, C.M]].forEach(([x0, terminal]) => {
+        g[0][x0 + 1] = terminal;
+        for (let r = 1; r <= 7; r++) {
+          for (let c = 0; c < 3; c++) if (r === 1 || r === 7 || c !== 1) g[r][x0 + c] = C.B;
+        }
+      });
+      for (let i = 0; i < step; i++) for (let c = 0; c < 3; c++) g[7 - i][c] = C.G;
+      g[step][3] = g[step][4] = C.W;
       return g;
-    }
-    const logs = [
+    }    const logs = [
       "08:14:02 INFO: HASS: sensor 1 -> charging",
       "08:13:58 INFO: HASS: authenticated",
       "08:13:57 INFO: HASS: connecting to 192.168.1.10:8123",

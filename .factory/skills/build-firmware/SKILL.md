@@ -15,7 +15,7 @@ scripts/test.sh wifi       # tests whose name contains "wifi"
 CXXFLAGS="-fsanitize=address,undefined" scripts/test.sh
 ```
 
-- Builds `tests/host/*.cpp` with `main/wifi_policy.cpp` and `main/validation.cpp` using `$CXX` (default `c++`), `-Wall -Wextra -Werror`.
+- Builds `tests/host/*.cpp` with `main/wifi_policy.cpp`, `main/validation.cpp`, and `main/display_frame.cpp` using `$CXX` (default `c++`), `-Wall -Wextra -Werror`.
 - A new pure source file must be added to the compile line in `scripts/test.sh`.
 
 ## 2. Formatting

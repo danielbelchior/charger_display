@@ -14,7 +14,6 @@
 #include "ota.h"
 #include "wifi_manager.h"
 
-static uint32_t lastFrameAt = 0;
 static bool networkServicesStarted = false;
 
 static const char* resetReasonName(esp_reset_reason_t reason) {
@@ -65,7 +64,6 @@ static void onWifiConnected() {
 
 static void onWifiDisconnected() {
     app.wifiConnected = false;
-    resetSensorStates();
     displayRender();
 }
 
@@ -112,10 +110,5 @@ void loop() {
     hassLoop();
     httpServerLoop();
     superviseHomeAssistant();
-
-    const uint32_t now = millis();
-    if (now - lastFrameAt >= DISPLAY_FRAME_MS) {
-        lastFrameAt = now;
-        displayTick();
-    }
+    displayLoop();
 }

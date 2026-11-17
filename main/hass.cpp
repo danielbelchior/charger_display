@@ -122,10 +122,18 @@ static void handleTrigger(const char* entityId, const char* toState, const char*
         displayRender();
         if (i < 2) {
             playSound();
-        } else if (isOnState(toState)) {
-            playSound(3, 50, 100);
         } else {
-            playSound(1, 50, 300);
+            // Sensor 3 is the air compressor.
+            const bool on = isOnState(toState);
+            if (on) {
+                playSound(3, 50, 100);
+            } else {
+                playSound(1, 50, 300);
+            }
+            // Attribute-only updates arrive with an unchanged state; no text for those.
+            if (strcmp(toState, fromState) != 0) {
+                displayShowMessage(on ? "ON" : "OFF", on ? GREEN : RED);
+            }
         }
         return;
     }

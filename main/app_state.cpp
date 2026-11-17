@@ -23,12 +23,6 @@ void setSensorState(size_t index, const char* state) {
     strlcpy(app.sensorState[index], state ? state : "unknown", SENSOR_STATE_LEN);
 }
 
-void resetSensorStates() {
-    for (size_t i = 0; i < SENSOR_COUNT; i++) {
-        setSensorState(i, "unknown");
-    }
-}
-
 // RTC slow memory survives a software reset but not a power cycle, so the
 // magic value tells us whether the note was written by restartDevice().
 static constexpr uint32_t RESTART_NOTE_MAGIC = 0xC4A26E01;

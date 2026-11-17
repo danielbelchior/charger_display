@@ -26,6 +26,7 @@ main/                 Firmware. Arduino compiles every .cpp here
   wifi_policy.*       Pure WiFi reconnect state machine (host tested)
   validation.*        Pure input parsing / HA on-state (host tested)
   log_ring.h          Pure event-log ring buffer (host tested)
+  display_frame.*     Pure 8x8 frame composer: batteries + status column (host tested)
   wifi_manager.*      Adapter: ESP32 WiFi driver <-> WifiPolicy
   hass.*              Home Assistant WebSocket + REST
   http_server.*       Web UI, REST API (80), status WebSocket (81)
@@ -43,10 +44,11 @@ http-server/          Optional UDP log receiver (Python), not part of the firmwa
 ## Rules
 
 - **WiFi**: never call `WiFi.begin()`, `WiFi.reconnect()`, `setAutoReconnect(true)`, or `setSleep(true)` outside `wifi_manager.cpp`. Change reconnect behaviour in `WifiPolicy` and add a test in `tests/host/test_wifi_policy.cpp` ([ADR 0001](docs/adr/0001-own-wifi-reconnect.md), [0002](docs/adr/0002-wifi-modem-sleep-off.md)).
-- **Pure modules** (`wifi_policy.*`, `validation.*`, `log_ring.h`) include only standard C/C++ headers. No `Arduino.h`, no `millis()`; time is a `uint32_t now` parameter ([ADR 0005](docs/adr/0005-pure-logic-host-tests.md)).
+- **Pure modules** (`wifi_policy.*`, `validation.*`, `log_ring.h`, `display_frame.*`) include only standard C/C++ headers. No `Arduino.h`, no `millis()`; time is a `uint32_t now` parameter ([ADR 0005](docs/adr/0005-pure-logic-host-tests.md)).
 - **Timing**: compare with unsigned subtraction (`now - start >= timeout`); it survives `millis()` wraparound. Never `now >= deadline`.
 - **Loop**: everything runs cooperatively in `loop()`. No `delay()` beyond a few ms, no blocking network calls without a timeout. The WiFi event callback only sets flags.
 - **Web UI**: edit `control-panel/index.html`, then sync `main/http_server_index.h` (see the `update-web-ui` skill). No CDN, fonts, or external assets ([ADR 0003](docs/adr/0003-self-contained-web-ui.md)). Do not hand-edit the header otherwise.
+- **Display**: patterns use only the full-intensity `Color` palette; the hardware dims the whole display, never single LEDs. Change patterns in `display_frame.cpp`, cover them in `tests/host/test_display_frame.cpp`, and keep the web UI demo frame and the README pattern table in step.
 - **API changes**: keep `http_server.cpp`, `control-panel/index.html`, and `docs/api.md` in agreement.
 - **Config**: new tunables go in `config.h`; user-overridable ones get an `#ifndef` default and a commented entry in `secrets_template.h`.
 - **Secrets**: never log or echo `WIFI_PASSWORD`, `HASS_TOKEN`, or `OTA_PASSWORD`.

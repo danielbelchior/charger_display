@@ -23,7 +23,7 @@ Read `AGENTS.md`, `CONTEXT.md`, and the ADRs in `docs/adr/` first.
 2. **Loop health**: no long `delay()`, blocking I/O without timeouts, or unbounded loops. The WiFi event callback only records flags.
 3. **Timing**: unsigned-subtraction comparisons; behaviour across `millis()` wraparound; timers reset on the right transitions.
 4. **WiFi ownership** ([ADR 0001](../../docs/adr/0001-own-wifi-reconnect.md), [0002](../../docs/adr/0002-wifi-modem-sleep-off.md)): no `WiFi.begin/reconnect`, `setAutoReconnect(true)`, or `setSleep(true)` outside `wifi_manager.cpp`; decisions live in `WifiPolicy`.
-5. **Pure modules** ([ADR 0005](../../docs/adr/0005-pure-logic-host-tests.md)): `wifi_policy.*`, `validation.*`, `log_ring.h` stay Arduino-free; new logic has host tests that would fail without the change.
+5. **Pure modules** ([ADR 0005](../../docs/adr/0005-pure-logic-host-tests.md)): `wifi_policy.*`, `validation.*`, `log_ring.h`, `display_frame.*` stay Arduino-free; display patterns use only full palette colors (no per-LED dimming); new logic has host tests that would fail without the change.
 6. **Home Assistant**: reconnect, auth failure, and idle-timeout paths; one client object per connection; REST timeouts.
 7. **HTTP API and UI**: input validated with `validation.*`; `/status` fields, `control-panel/index.html`, and `docs/api.md` agree; `main/http_server_index.h` matches the HTML; no CDN or external assets.
 8. **Secrets**: no token or password in logs, responses, or committed files.

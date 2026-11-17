@@ -5,8 +5,9 @@
 constexpr size_t SENSOR_COUNT = 3;
 constexpr size_t SENSOR_STATE_LEN = 16;
 
-// Sensor 1 and 2 are the two chargers shown on the matrix. Sensor 3 only
-// produces sounds (3 beeps on "on", one long beep otherwise).
+// Sensor 1 and 2 are the two chargers shown on the matrix. Sensor 3 is the air
+// compressor: on a state change it beeps (3 short on "on", one long otherwise)
+// and scrolls a green "ON" or red "OFF" across the matrix.
 extern const char* const SENSOR_ENTITY_IDS[SENSOR_COUNT];
 
 struct AppState {
@@ -19,7 +20,6 @@ struct AppState {
 extern AppState app;
 
 void setSensorState(size_t index, const char* state);
-void resetSensorStates();
 
 // Restart the chip, remembering why so the next boot can log it.
 [[noreturn]] void restartDevice(const char* reason);
