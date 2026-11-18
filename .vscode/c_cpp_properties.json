@@ -647,7 +647,7 @@
                 ]
             },
             "defines": [
-                "FIRMWARE_VERSION=\"v2026.11.17.2\"",
+                "FIRMWARE_VERSION=\"v2026.11.17.2-dirty\"",
                 "PLATFORMIO=60200",
                 "ARDUINO_ESP32_DEV",
                 "ESP32_ARDUINO_LIB_BUILDER",
