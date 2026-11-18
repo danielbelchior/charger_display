@@ -45,7 +45,7 @@ void drawCharger(Frame f, int index, ChargerState state, uint32_t step) {
             break;
         }
         case ChargerState::Disconnected:
-            drawOutline(f, x0, BLUE);
+            drawOutline(f, x0, GREEN);
             break;
         case ChargerState::Unknown:
             drawOutline(f, x0, YELLOW);
